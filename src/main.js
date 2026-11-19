@@ -1,0 +1,254 @@
+import { CHARACTERS, weaponName } from './config.js';
+import { createAudio } from './audio.js';
+import { createInput } from './input.js';
+import { Game } from './game.js';
+
+const BASE = import.meta.env.BASE_URL;
+const params = new URLSearchParams(location.search);
+const forceTouch = params.get('touch') === '1';
+
+const audio = createAudio();
+const input = createInput();
+let game;
+let characterId = 'bruce';
+let toastTimer = 0;
+let subTimer = 0;
+
+const $ = (id) => document.getElementById(id);
+
+function show(id) {
+  for (const screen of document.querySelectorAll('.screen')) screen.classList.add('hidden');
+  if (id) $(id).classList.remove('hidden');
+  document.documentElement.classList.toggle('playing', !id);
+}
+
+function setTouchClass() {
+  const touch = forceTouch || matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+  document.documentElement.classList.toggle('touch', touch);
+  document.documentElement.classList.toggle('portrait', window.innerHeight > window.innerWidth + 20);
+  $('title-controls').textContent = touch
+    ? 'Left stick moves. Drag the right side to look. Fire, reload, ability, and swap sit under your thumb.'
+    : 'WASD move · mouse look · click fire · R reload · Q ability · 1–3 weapons';
+  $('hint').textContent = touch
+    ? 'Left stick moves · drag the right side to look'
+    : 'WASD · mouse · click · R · Q · 1 2 3';
+}
+
+const ui = {
+  health(hp, max) {
+    const pct = Math.max(0, Math.min(1, hp / max));
+    $('hpfill').style.width = `${pct * 100}%`;
+    $('hptxt').textContent = String(Math.max(0, Math.ceil(hp)));
+    $('hpfill').style.background = pct < 0.3
+      ? 'linear-gradient(90deg, #5a1018, #ff5a4a)'
+      : 'linear-gradient(90deg, #6d1e24, #d45448)';
+  },
+  weapon(name, ammo, names, active) {
+    $('wname').textContent = name;
+    $('ammo').textContent = ammo;
+    const pips = $('pips');
+    pips.replaceChildren();
+    for (let i = 0; i < 3; i++) {
+      const pip = document.createElement('i');
+      if (i === active) pip.className = 'on';
+      if (!names[i]) pip.style.opacity = '0.25';
+      pip.title = names[i] || '';
+      pips.append(pip);
+    }
+  },
+  ability(name, label, ready) {
+    $('aname').textContent = name;
+    $('acd').textContent = label;
+    $('ability').classList.toggle('ready', ready);
+    $('btn-ability')?.classList.toggle('ready', ready);
+  },
+  objective(text) { $('obj').textContent = text; },
+  toast(text) {
+    const el = $('toast');
+    el.textContent = text;
+    el.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.textContent = ''; }, 2200);
+  },
+  subtitle(who, text, ms = 2000) {
+    const el = $('sub');
+    el.replaceChildren();
+    const b = document.createElement('b');
+    b.textContent = who;
+    el.append(b, document.createTextNode(text));
+    clearTimeout(subTimer);
+    subTimer = setTimeout(() => { el.replaceChildren(); }, ms);
+  },
+  feed(text) {
+    const el = $('feed');
+    const row = document.createElement('div');
+    row.textContent = text;
+    el.prepend(row);
+    while (el.children.length > 4) el.lastChild.remove();
+    setTimeout(() => row.remove(), 3200);
+  },
+  boss(showBar, frac) {
+    $('bossbar').classList.toggle('hidden', !showBar);
+    $('bossfill').style.width = `${Math.max(0, Math.min(1, frac)) * 100}%`;
+  },
+  intro(showIntro, kicker) {
+    $('bossintro').classList.toggle('hidden', !showIntro);
+    if (kicker) $('boss-kicker').textContent = kicker;
+  },
+  hurt(v) { $('hurt').style.setProperty('--h', String(Math.max(0, Math.min(1, v)))); },
+  hint(showHint) { $('hint').classList.toggle('hidden', !showHint); },
+  buff(on) { $('hud').classList.toggle('buff', on); },
+  fade(opacity) { $('fade').style.opacity = String(opacity); },
+  ping() {
+    $('cross').classList.add('hot');
+    setTimeout(() => $('cross').classList.remove('hot'), 70);
+  },
+};
+
+function boot(id) {
+  characterId = id;
+  show(null);
+  $('hud').classList.remove('hidden');
+  input.setEnabled(true);
+  game.start(id);
+}
+
+function backToSelect() {
+  input.setEnabled(false);
+  if (document.pointerLockElement) document.exitPointerLock();
+  game.stop();
+  $('hud').classList.add('hidden');
+  audio.playPlaylist('menu');
+  show('select');
+}
+
+function buildCards() {
+  const root = $('cards');
+  for (const c of Object.values(CHARACTERS)) {
+    const card = document.createElement('article');
+    card.className = 'card';
+    const img = document.createElement('img');
+    img.src = BASE + c.portrait;
+    img.alt = c.name;
+    const copy = document.createElement('div');
+    copy.className = 'copy';
+    const h3 = document.createElement('h3');
+    h3.textContent = c.name;
+    const role = document.createElement('p');
+    role.className = 'role';
+    role.textContent = c.role;
+    const bio = document.createElement('p');
+    bio.className = 'bio';
+    bio.textContent = c.bio;
+    const traits = document.createElement('ul');
+    traits.className = 'traits';
+    for (const t of c.traits) {
+      const li = document.createElement('li');
+      li.textContent = t;
+      traits.append(li);
+    }
+    const ability = document.createElement('p');
+    ability.className = 'ability-name';
+    ability.textContent = c.ability.name;
+    const flavor = document.createElement('p');
+    flavor.className = 'flavor';
+    flavor.textContent = c.ability.flavor;
+    const favs = document.createElement('p');
+    favs.className = 'favs';
+    favs.textContent = `Favorites: ${c.favorites.map(weaponName).join(', ')}`;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'primary';
+    button.textContent = `Take ${c.short}`;
+    button.addEventListener('click', () => boot(c.id));
+    copy.append(h3, role, bio, traits, ability, flavor, favs);
+    card.append(img, copy, button);
+    root.append(card);
+  }
+}
+
+function guardTouch() {
+  document.addEventListener('touchmove', (e) => {
+    if (e.target.closest('.copy')) return;
+    e.preventDefault();
+  }, { passive: false });
+  document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+  document.addEventListener('gesturechange', (e) => e.preventDefault(), { passive: false });
+  document.addEventListener('gestureend', (e) => e.preventDefault(), { passive: false });
+  let last = 0;
+  document.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    if (now - last < 280) e.preventDefault();
+    last = now;
+  }, { passive: false });
+  window.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+
+async function enter() {
+  const button = $('enter');
+  button.disabled = true;
+  button.textContent = 'Loading';
+  audio.ensure();
+  try {
+    await audio.resume();
+    await audio.loadAll();
+  } catch (err) {
+    console.warn(err);
+  }
+  audio.playPlaylist('menu');
+  show('select');
+}
+
+function main() {
+  setTouchClass();
+  window.addEventListener('resize', setTouchClass);
+  window.addEventListener('orientationchange', setTouchClass);
+  guardTouch();
+  $('title').style.backgroundImage = `linear-gradient(180deg, rgba(5,7,10,0.15), rgba(5,7,10,0.88)), url(${BASE}assets/art/levels/cave.jpg)`;
+  buildCards();
+  input.mount();
+  try {
+    game = new Game({
+      canvas: $('view'),
+      audio,
+      input,
+      ui,
+      hooks: {
+        onDeath(msg) {
+          input.setEnabled(false);
+          if (document.pointerLockElement) document.exitPointerLock();
+          $('over-msg').textContent = msg;
+          $('hud').classList.add('hidden');
+          show('over');
+        },
+        onVictory(msg) {
+          input.setEnabled(false);
+          if (document.pointerLockElement) document.exitPointerLock();
+          $('win-msg').textContent = msg;
+          $('hud').classList.add('hidden');
+          show('win');
+        },
+      },
+    });
+  } catch (err) {
+    $('fatal').classList.remove('hidden');
+    $('fatal').textContent = 'This browser could not start the shooter. WebGL is required.';
+    console.error(err);
+    return;
+  }
+  if (!game.renderer.getContext()) {
+    $('fatal').classList.remove('hidden');
+    $('fatal').textContent = 'WebGL is unavailable in this browser.';
+  }
+  $('enter').addEventListener('click', enter);
+  $('retry').addEventListener('click', () => boot(characterId));
+  $('again').addEventListener('click', () => boot(characterId));
+  $('to-select').addEventListener('click', backToSelect);
+  $('win-select').addEventListener('click', backToSelect);
+  if (params.has('debug')) window.__ZS = game;
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) audio.resume().catch(() => {});
+  });
+}
+
+main();
