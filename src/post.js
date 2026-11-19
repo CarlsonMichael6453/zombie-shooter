@@ -27,9 +27,11 @@ const GradeShader = {
     void main() {
       vec3 col = texture2D(tDiffuse, vUv).rgb;
       float l = dot(col, vec3(0.299, 0.587, 0.114));
-      col = mix(col, vec3(l * 0.55, l * 0.68, l * 0.95), 0.18);
-      col.b += 0.025 * (1.0 - col.b);
-      col.r += 0.02 * smoothstep(0.45, 1.0, l);
+      vec3 shadow = vec3(0.055, 0.075, 0.09);
+      vec3 cool = vec3(0.78, 0.86, 0.94);
+      col = mix(shadow, col, smoothstep(0.0, 0.22, l));
+      col = mix(col, cool, smoothstep(0.62, 1.0, l) * 0.18);
+      col = mix(col, vec3(l * 0.72, l * 0.8, l * 0.9), 0.06);
       float n = fract(sin(dot(vUv + fract(uTime * 0.13), vec2(12.9898, 78.233))) * 43758.5453);
       col += (n - 0.5) * uGrain;
       float vig = smoothstep(0.95, 0.28, length(vUv - 0.5));

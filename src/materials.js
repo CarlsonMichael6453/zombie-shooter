@@ -1,29 +1,29 @@
 import {
   ShaderMaterial, Color, Vector3, FrontSide, DoubleSide, BufferAttribute, Mesh,
-  CanvasTexture, LinearFilter, RepeatWrapping,
+  CanvasTexture, LinearFilter, RepeatWrapping, TextureLoader, SRGBColorSpace,
+  LinearSRGBColorSpace,
 } from 'three';
 
 export const flash = {
   uCamPos: { value: new Vector3() },
   uCamDir: { value: new Vector3(0, 0, -1) },
-  uAmbient: { value: new Color(0x1a2c44) },
-  uLight: { value: new Color(0xffe2b0) },
-  uFog: { value: new Color(0x071018) },
-  uRim: { value: new Color(0x6d93c4) },
-  uMoonDir: { value: new Vector3(-0.25, 0.9, -0.2).normalize() },
-  uMoon: { value: new Color(0xb7c8ea) },
-  uRange: { value: 22 },
-  uInner: { value: Math.cos(0.42) },
-  uOuter: { value: Math.cos(0.95) },
-  uIntensity: { value: 2.05 },
-  uFogDensity: { value: 0.045 },
-  uMoonAmt: { value: 0.15 },
-  uRimAmt: { value: 0.55 },
-  uBump: { value: null },
+  uAmbient: { value: new Color(0x142028) },
+  uSky: { value: new Color(0x1c3442) },
+  uGround: { value: new Color(0x0c1418) },
+  uLight: { value: new Color(0xd7e6f4) },
+  uFog: { value: new Color(0x10181e) },
+  uRim: { value: new Color(0x7f9fb0) },
+  uMoonDir: { value: new Vector3(-0.22, 0.86, -0.28).normalize() },
+  uMoon: { value: new Color(0x9eb0c4) },
+  uRange: { value: 26 },
+  uInner: { value: Math.cos(0.5) },
+  uOuter: { value: Math.cos(1.15) },
+  uIntensity: { value: 2.85 },
+  uFogDensity: { value: 0.03 },
+  uMoonAmt: { value: 0.2 },
+  uRimAmt: { value: 0.72 },
+  uTime: { value: 0 },
 };
-
-const bump = makeWetBump();
-flash.uBump.value = bump;
 
 const VERT = /* glsl */ `
 attribute vec3 color;
@@ -52,7 +52,8 @@ const FRAG = /* glsl */ `
 precision highp float;
 uniform vec3 uCamPos;
 uniform vec3 uCamDir;
-uniform vec3 uAmbient;
+uniform vec3 uSky;
+uniform vec3 uGround;
 uniform vec3 uLight;
 uniform vec3 uFog;
 uniform vec3 uRim;
@@ -65,45 +66,75 @@ uniform float uIntensity;
 uniform float uFogDensity;
 uniform float uMoonAmt;
 uniform float uRimAmt;
+uniform float uTime;
 uniform vec3 uColor;
 uniform float uFlash;
 uniform float uGloss;
 uniform float uUvRepeat;
-uniform float uBumpAmt;
-uniform sampler2D uBump;
+uniform float uNormalAmt;
+uniform float uMapAmt;
+uniform float uRoughBias;
+uniform float uScroll;
+uniform float uAlphaAmt;
+uniform float uAlphaCut;
+uniform sampler2D uMap;
+uniform sampler2D uNormal;
+uniform sampler2D uRough;
+uniform sampler2D uAlpha;
 varying vec3 vW;
 varying vec3 vN;
 varying vec3 vC;
 varying vec2 vUv;
 void main() {
+  if (uAlphaAmt > 0.5) {
+    float a = texture2D(uAlpha, vUv).a;
+    if (a < uAlphaCut) discard;
+  }
   vec3 N = normalize(vN);
   if (!gl_FrontFacing) N = -N;
   vec2 uv = vUv * uUvRepeat;
-  float h = texture2D(uBump, uv).r;
-  float hx = texture2D(uBump, uv + vec2(0.008, 0.0)).r;
-  float hy = texture2D(uBump, uv + vec2(0.0, 0.008)).r;
-  N = normalize(N + vec3(h - hx, hy - h, 0.0) * uBumpAmt);
+  uv += vec2(sin(uv.y * 14.0 + uTime * uScroll), cos(uv.x * 11.0 + uTime * uScroll * 0.7)) * uScroll * 0.04;
+  vec3 tex = texture2D(uMap, uv).rgb;
+  vec3 albedo = uColor * vC * mix(vec3(1.0), tex, uMapAmt);
+  vec3 nTex = texture2D(uNormal, uv).xyz * 2.0 - 1.0;
+  nTex.xy *= uNormalAmt;
+  vec3 dp1 = dFdx(vW);
+  vec3 dp2 = dFdy(vW);
+  vec2 duv1 = dFdx(uv);
+  vec2 duv2 = dFdy(uv);
+  vec3 T = dp1 * duv2.y - dp2 * duv1.y;
+  float tlen = length(T);
+  if (tlen > 1e-5 && uNormalAmt > 0.001) {
+    T /= tlen;
+    vec3 B = normalize(cross(N, T));
+    N = normalize(mat3(T, B, N) * normalize(nTex));
+  }
   vec3 toCam = uCamPos - vW;
   float dist = length(toCam);
-  vec3 L = toCam / max(dist, 1e-3);
-  float ndot = max(dot(N, L), 0.0);
+  vec3 V = toCam / max(dist, 1e-3);
+  float ndot = max(dot(N, V), 0.0);
   float coneDot = dot(normalize(vW - uCamPos), normalize(uCamDir));
   float cone = smoothstep(uOuter, uInner, coneDot);
-  float atten = pow(clamp(1.0 - dist / uRange, 0.0, 1.0), 1.15);
+  float atten = pow(clamp(1.0 - dist / uRange, 0.0, 1.0), 1.2);
   float beam = ndot * cone * atten * uIntensity;
+  float hemi = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
+  vec3 amb = mix(uGround, uSky, hemi);
   float moon = max(dot(N, normalize(uMoonDir)), 0.0) * uMoonAmt;
-  float rim = pow(1.0 - max(dot(N, normalize(toCam)), 0.0), 2.2) * uRimAmt;
-  vec3 albedo = uColor * vC;
-  albedo *= mix(0.82, 1.08, h);
-  vec3 H = normalize(L + normalize(toCam));
-  float specPow = mix(10.0, 72.0, uGloss);
-  float spec = pow(max(dot(N, H), 0.0), specPow) * cone * atten * (0.15 + uGloss);
-  vec3 col = albedo * (uAmbient + uLight * beam + uMoon * moon);
-  col += uRim * rim * (0.35 + moon);
-  col += uLight * spec * 0.85;
-  col += vec3(0.7) * uFlash;
-  float fogF = 1.0 - exp(-uFogDensity * uFogDensity * dist * dist);
-  fogF = clamp(fogF + dist * 0.004, 0.0, 1.0);
+  float rim = pow(1.0 - max(dot(N, V), 0.0), 2.4) * uRimAmt;
+  float roughTex = texture2D(uRough, uv).r;
+  float rough = mix(1.0 - uGloss, roughTex, uMapAmt);
+  rough = clamp(rough + uRoughBias, 0.04, 1.0);
+  vec3 H = normalize(V + V);
+  float specPow = mix(96.0, 8.0, rough);
+  float spec = pow(ndot, specPow) * (1.0 - rough);
+  float fres = pow(1.0 - max(dot(N, V), 0.0), 4.0) * (1.0 - rough);
+  vec3 col = albedo * (amb + uLight * beam + uMoon * moon);
+  col += uRim * rim * (0.45 + moon);
+  col += uLight * (spec * 0.55 + fres * 0.85) * cone * atten;
+  col += vec3(0.85) * uFlash;
+  float wobble = 1.0 + 0.07 * sin(uTime * 0.37 + vW.x * 0.13 + vW.z * 0.09);
+  float fogF = 1.0 - exp(-uFogDensity * uFogDensity * dist * dist * wobble);
+  fogF = clamp(fogF, 0.0, 1.0);
   col = mix(col, uFog, fogF);
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
@@ -111,10 +142,59 @@ void main() {
 }
 `;
 
+const loader = new TextureLoader();
+let pending = 0;
+let readyResolve = () => {};
+export const texturesReady = new Promise((resolve) => { readyResolve = resolve; });
+
+function loadTex(url, colorSpace) {
+  const tex = loader.load(url, () => {
+    pending -= 1;
+    if (pending <= 0) readyResolve();
+  }, undefined, () => {
+    pending -= 1;
+    if (pending <= 0) readyResolve();
+  });
+  pending += 1;
+  tex.wrapS = tex.wrapT = RepeatWrapping;
+  tex.magFilter = tex.minFilter = LinearFilter;
+  tex.colorSpace = colorSpace;
+  tex.userData.shared = true;
+  return tex;
+}
+
+const base = `${import.meta.env.BASE_URL}assets/textures/`;
+const blank = blankTex();
+const flatNormal = normalTex();
+export const maps = {
+  rock: {
+    map: loadTex(`${base}rock_color.jpg`, SRGBColorSpace),
+    normal: loadTex(`${base}rock_normal.jpg`, LinearSRGBColorSpace),
+    rough: loadTex(`${base}rock_rough.jpg`, LinearSRGBColorSpace),
+  },
+  bark: {
+    map: loadTex(`${base}bark_color.jpg`, SRGBColorSpace),
+    normal: loadTex(`${base}bark_normal.jpg`, LinearSRGBColorSpace),
+    rough: loadTex(`${base}bark_rough.jpg`, LinearSRGBColorSpace),
+  },
+  ground: {
+    map: loadTex(`${base}ground_color.jpg`, SRGBColorSpace),
+    normal: loadTex(`${base}ground_normal.jpg`, LinearSRGBColorSpace),
+    rough: loadTex(`${base}ground_rough.jpg`, LinearSRGBColorSpace),
+  },
+};
+if (pending === 0) readyResolve();
+
+let detail = 1;
+export function setDetail(quality) {
+  detail = quality === 'low' ? 0.4 : 1;
+}
+
 function bindShared(uniforms) {
   uniforms.uCamPos = flash.uCamPos;
   uniforms.uCamDir = flash.uCamDir;
-  uniforms.uAmbient = flash.uAmbient;
+  uniforms.uSky = flash.uSky;
+  uniforms.uGround = flash.uGround;
   uniforms.uLight = flash.uLight;
   uniforms.uFog = flash.uFog;
   uniforms.uRim = flash.uRim;
@@ -127,48 +207,57 @@ function bindShared(uniforms) {
   uniforms.uFogDensity = flash.uFogDensity;
   uniforms.uMoonAmt = flash.uMoonAmt;
   uniforms.uRimAmt = flash.uRimAmt;
-  uniforms.uBump = flash.uBump;
+  uniforms.uTime = flash.uTime;
 }
 
 export function litMat(color = 0xffffff, side = FrontSide, opts = {}) {
+  const pack = opts.maps || null;
   const uniforms = {
     uColor: { value: new Color(color) },
     uFlash: { value: 0 },
     uGloss: { value: opts.gloss ?? 0.42 },
     uUvRepeat: { value: opts.uvRepeat ?? 2.4 },
-    uBumpAmt: { value: opts.bump ?? 1.1 },
+    uNormalAmt: { value: (opts.normalAmt ?? (pack ? 1 : 0.35)) * detail },
+    uMapAmt: { value: pack ? 1 : 0 },
+    uRoughBias: { value: opts.roughBias ?? 0 },
+    uScroll: { value: opts.scroll ?? 0 },
+    uAlphaAmt: { value: opts.alpha ? 1 : 0 },
+    uAlphaCut: { value: opts.alphaCut ?? 0.35 },
+    uMap: { value: pack?.map || blank },
+    uNormal: { value: opts.normalMap || pack?.normal || flatNormal },
+    uRough: { value: pack?.rough || blank },
+    uAlpha: { value: opts.alpha || blank },
   };
   bindShared(uniforms);
-  return new ShaderMaterial({
+  const mat = new ShaderMaterial({
     uniforms,
     vertexShader: VERT,
     fragmentShader: FRAG,
     side,
+    transparent: !!opts.transparent,
   });
+  if (opts.alpha) mat.alphaTest = opts.alphaCut ?? 0.35;
+  return mat;
 }
 
+export function pbrMat(preset, color, opts = {}) {
+  return litMat(color, opts.side, { ...opts, maps: maps[preset] });
+}
+
+let waterMat;
 export function puddleMat() {
-  const uniforms = {
-    uColor: { value: new Color(0x0c1828) },
-    uFlash: { value: 0 },
-    uGloss: { value: 0.95 },
-    uUvRepeat: { value: 1.2 },
-    uBumpAmt: { value: 0.35 },
-    uTime: { value: 0 },
-  };
-  bindShared(uniforms);
-  const frag = FRAG.replace(
-    'float h = texture2D(uBump, uv).r;',
-    'uv += vec2(sin(uv.y * 18.0 + uTime * 1.6), cos(uv.x * 14.0 + uTime)) * 0.03;\n  float h = texture2D(uBump, uv).r;',
-  ).replace('uniform float uBumpAmt;', 'uniform float uBumpAmt;\nuniform float uTime;');
-  return new ShaderMaterial({
-    uniforms,
-    vertexShader: VERT,
-    fragmentShader: frag,
-    side: DoubleSide,
-    transparent: true,
-    opacity: 1,
-  });
+  if (!waterMat) {
+    waterMat = pbrMat('rock', 0x16303a, {
+      side: DoubleSide,
+      gloss: 0.96,
+      uvRepeat: 1.6,
+      normalAmt: 0.55,
+      roughBias: -0.45,
+      scroll: 1.4,
+    });
+    waterMat.userData.shared = true;
+  }
+  return waterMat;
 }
 
 export function ensureColor(geo) {
@@ -210,36 +299,69 @@ export function paint(geo, fn) {
 
 export function solid(geo, color, side) {
   ensureColor(geo);
-  return new Mesh(geo, litMat(color, side));
+  return new Mesh(geo, litMat(color, side, { normalAmt: 0.2 }));
 }
 
 export function setAtmosphere(level) {
   if (level === 'forest') {
-    flash.uAmbient.value.set(0x243044);
-    flash.uFog.value.set(0x0a121c);
-    flash.uFogDensity.value = 0.014;
-    flash.uMoonAmt.value = 1.45;
-    flash.uRimAmt.value = 0.7;
-    flash.uRange.value = 18;
-    flash.uIntensity.value = 1.85;
-    flash.uInner.value = Math.cos(0.5);
-    flash.uOuter.value = Math.cos(1.05);
-    flash.uLight.value.set(0xffe6c4);
-  } else {
-    flash.uAmbient.value.set(0x2a4560);
-    flash.uFog.value.set(0x0c1824);
-    flash.uFogDensity.value = 0.026;
-    flash.uMoonAmt.value = 0.22;
+    flash.uSky.value.set(0x243444);
+    flash.uGround.value.set(0x101318);
+    flash.uAmbient.value.set(0x243444);
+    flash.uFog.value.set(0x111319);
+    flash.uFogDensity.value = 0.016;
+    flash.uMoonAmt.value = 1.25;
     flash.uRimAmt.value = 0.85;
-    flash.uRange.value = 28;
-    flash.uIntensity.value = 2.7;
-    flash.uInner.value = Math.cos(0.55);
-    flash.uOuter.value = Math.cos(1.15);
-    flash.uLight.value.set(0xffd7a2);
+    flash.uRange.value = 20;
+    flash.uIntensity.value = 1.7;
+    flash.uInner.value = Math.cos(0.48);
+    flash.uOuter.value = Math.cos(1.05);
+    flash.uLight.value.set(0xd5e2f2);
+    flash.uMoon.value.set(0x9eb0c4);
+    flash.uRim.value.set(0x8aa0b8);
+  } else {
+    flash.uSky.value.set(0x1c3442);
+    flash.uGround.value.set(0x0c1418);
+    flash.uAmbient.value.set(0x1c3442);
+    flash.uFog.value.set(0x10181e);
+    flash.uFogDensity.value = 0.03;
+    flash.uMoonAmt.value = 0.16;
+    flash.uRimAmt.value = 0.78;
+    flash.uRange.value = 30;
+    flash.uIntensity.value = 3.05;
+    flash.uInner.value = Math.cos(0.48);
+    flash.uOuter.value = Math.cos(1.2);
+    flash.uLight.value.set(0xd7e6f4);
+    flash.uRim.value.set(0x7f9fb0);
   }
 }
 
-function makeWetBump() {
+function blankTex() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 2;
+  const g = c.getContext('2d');
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, 2, 2);
+  const tex = new CanvasTexture(c);
+  tex.wrapS = tex.wrapT = RepeatWrapping;
+  tex.colorSpace = SRGBColorSpace;
+  tex.userData.shared = true;
+  return tex;
+}
+
+function normalTex() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 2;
+  const g = c.getContext('2d');
+  g.fillStyle = '#8080ff';
+  g.fillRect(0, 0, 2, 2);
+  const tex = new CanvasTexture(c);
+  tex.wrapS = tex.wrapT = RepeatWrapping;
+  tex.colorSpace = LinearSRGBColorSpace;
+  tex.userData.shared = true;
+  return tex;
+}
+
+export function shellNormal() {
   const size = 128;
   const c = document.createElement('canvas');
   c.width = c.height = size;
@@ -247,19 +369,22 @@ function makeWetBump() {
   const img = g.createImageData(size, size);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      const n = Math.sin(x * 0.37) * Math.cos(y * 0.29)
-        + Math.sin(x * 0.11 + y * 0.17) * 0.6
-        + Math.sin(x * 0.9 - y * 1.1) * 0.25;
-      const v = Math.floor(128 + n * 70);
+      const ridge = Math.sin(y * 0.55) * 0.65 + Math.sin(x * 0.22 + y * 0.15) * 0.25;
+      const nx = Math.sin(x * 0.45) * 18;
+      const ny = ridge * 42;
+      const nz = 90;
+      const len = Math.hypot(nx, ny, nz);
       const i = (y * size + x) * 4;
-      img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+      img.data[i] = 128 + (nx / len) * 127;
+      img.data[i + 1] = 128 + (ny / len) * 127;
+      img.data[i + 2] = 128 + (nz / len) * 127;
       img.data[i + 3] = 255;
     }
   }
   g.putImageData(img, 0, 0);
   const tex = new CanvasTexture(c);
   tex.wrapS = tex.wrapT = RepeatWrapping;
-  tex.magFilter = tex.minFilter = LinearFilter;
+  tex.colorSpace = LinearSRGBColorSpace;
   tex.userData.shared = true;
   return tex;
 }
