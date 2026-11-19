@@ -1,18 +1,23 @@
-const MOUSE = 0.00215;
-const TOUCH = 0.0048;
+import { loadSettings } from './settings.js';
+
+const DEADZONE = 0.16;
 
 export function createInput() {
   const keys = new Set();
   let enabled = false;
   let fire = false;
+  let ads = false;
   let joyId = null;
   let lookId = null;
   let joyX = 0;
   let joyY = 0;
+  let joySmX = 0;
+  let joySmY = 0;
+  let joyStamp = 0;
   const joyOrigin = { x: 0, y: 0 };
   const lookLast = { x: 0, y: 0 };
-  const look = { x: 0, y: 0 };
-  const edges = { reload: false, ability: false, swap: false, slots: [], fireEdge: false };
+  const look = { x: 0, y: 0, touch: false };
+  const edges = { reload: false, ability: false, swap: false, pause: false, slots: [], fireEdge: false };
 
   const moveZone = () => document.getElementById('move-zone');
   const lookZone = () => document.getElementById('look-zone');
@@ -22,8 +27,11 @@ export function createInput() {
     enabled = v;
     if (!v) {
       fire = false;
+      ads = false;
       joyX = 0;
       joyY = 0;
+      joySmX = 0;
+      joySmY = 0;
       joyId = null;
       lookId = null;
       keys.clear();
@@ -63,8 +71,14 @@ export function createInput() {
   }
 
   function onMouseDown(e) {
-    if (!enabled || e.button !== 0) return;
-    if (e.target.closest('button, .screen, #buttons, #rotate')) return;
+    if (!enabled) return;
+    if (e.target.closest('button, .screen, #buttons, #rotate, #pause, #settings, #feedback, #rating')) return;
+    if (e.button === 2) {
+      ads = true;
+      e.preventDefault();
+      return;
+    }
+    if (e.button !== 0) return;
     const canvas = document.getElementById('view');
     if (e.target === canvas && !document.pointerLockElement) {
       canvas.requestPointerLock();
@@ -76,17 +90,34 @@ export function createInput() {
   }
 
   function onMouseUp(e) {
+    if (e.button === 2) ads = false;
     if (e.button === 0) fire = false;
   }
 
   function onMouseMove(e) {
     if (!enabled || !document.pointerLockElement) return;
-    look.x += e.movementX * MOUSE;
-    look.y += -e.movementY * MOUSE;
+    look.x += e.movementX;
+    look.y += e.movementY;
+    look.touch = false;
   }
 
   function onLockChange() {
     if (!document.pointerLockElement) fire = false;
+  }
+
+  function applyJoy(dx, dy) {
+    const max = 56;
+    const nx = dx / max;
+    const ny = dy / max;
+    const mag = Math.min(1, Math.hypot(nx, ny));
+    let power = 0;
+    if (mag > DEADZONE) power = (mag - DEADZONE) / (1 - DEADZONE);
+    power *= power * (3 - 2 * power);
+    const inv = mag > 0.0001 ? 1 / Math.hypot(nx, ny) : 0;
+    joyX = nx * inv * power;
+    joyY = -ny * inv * power;
+    const show = Math.min(1, mag);
+    placeJoy(joyOrigin.x, joyOrigin.y, nx * max * show, ny * max * show);
   }
 
   function joyDown(e) {
@@ -96,21 +127,14 @@ export function createInput() {
     joyOrigin.x = e.clientX;
     joyOrigin.y = e.clientY;
     moveZone().setPointerCapture(e.pointerId);
-    placeJoy(e.clientX, e.clientY, 0, 0);
+    applyJoy(0, 0);
   }
 
   function joyMove(e) {
     if (e.pointerId !== joyId) return;
-    const dx = e.clientX - joyOrigin.x;
-    const dy = e.clientY - joyOrigin.y;
-    const max = 48;
-    const mag = Math.hypot(dx, dy) || 1;
-    const s = mag > max ? max / mag : 1;
-    const cx = dx * s;
-    const cy = dy * s;
-    joyX = cx / max;
-    joyY = -cy / max;
-    placeJoy(joyOrigin.x, joyOrigin.y, cx, cy);
+    const list = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [e];
+    const last = list[list.length - 1] || e;
+    applyJoy(last.clientX - joyOrigin.x, last.clientY - joyOrigin.y);
   }
 
   function joyUp(e) {
@@ -123,7 +147,7 @@ export function createInput() {
 
   function lookDown(e) {
     if (!enabled) return;
-    if (e.target.closest('#buttons')) return;
+    if (e.target.closest('#buttons, button')) return;
     e.preventDefault();
     lookId = e.pointerId;
     lookLast.x = e.clientX;
@@ -131,14 +155,25 @@ export function createInput() {
     lookZone().setPointerCapture(e.pointerId);
   }
 
+  function accumulateLook(list, fallback) {
+    let x = lookLast.x;
+    let y = lookLast.y;
+    for (const ev of list) {
+      look.x += ev.clientX - x;
+      look.y += ev.clientY - y;
+      x = ev.clientX;
+      y = ev.clientY;
+    }
+    lookLast.x = fallback.clientX;
+    lookLast.y = fallback.clientY;
+    look.touch = true;
+  }
+
   function lookMove(e) {
     if (e.pointerId !== lookId) return;
-    const dx = e.clientX - lookLast.x;
-    const dy = e.clientY - lookLast.y;
-    lookLast.x = e.clientX;
-    lookLast.y = e.clientY;
-    look.x += dx * TOUCH;
-    look.y += -dy * TOUCH;
+    e.preventDefault();
+    const list = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [e];
+    accumulateLook(list.length ? list : [e], e);
   }
 
   function lookUp(e) {
@@ -148,8 +183,9 @@ export function createInput() {
 
   function bindButton(id, fn) {
     const el = document.getElementById(id);
+    if (!el) return;
     el.addEventListener('pointerdown', (e) => {
-      if (!enabled) return;
+      if (!enabled && id !== 'btn-pause') return;
       e.preventDefault();
       e.stopPropagation();
       el.setPointerCapture(e.pointerId);
@@ -169,6 +205,9 @@ export function createInput() {
     window.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mouseup', onMouseUp);
     window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('contextmenu', (e) => {
+      if (enabled) e.preventDefault();
+    });
     document.addEventListener('pointerlockchange', onLockChange);
     const mz = moveZone();
     const lz = lookZone();
@@ -177,7 +216,7 @@ export function createInput() {
     mz.addEventListener('pointerup', joyUp);
     mz.addEventListener('pointercancel', joyUp);
     lz.addEventListener('pointerdown', lookDown);
-    lz.addEventListener('pointermove', lookMove);
+    lz.addEventListener('pointermove', lookMove, { passive: false });
     lz.addEventListener('pointerup', lookUp);
     lz.addEventListener('pointercancel', lookUp);
     bindButton('btn-fire', (down) => {
@@ -187,12 +226,19 @@ export function createInput() {
     bindButton('btn-reload', (down) => { if (down) edges.reload = true; });
     bindButton('btn-ability', (down) => { if (down) edges.ability = true; });
     bindButton('btn-swap', (down) => { if (down) edges.swap = true; });
-    window.addEventListener('blur', () => { fire = false; keys.clear(); });
+    bindButton('btn-aim', (down) => { ads = down; });
+    window.addEventListener('blur', () => { fire = false; ads = false; keys.clear(); });
   }
 
   function move() {
-    let x = joyX;
-    let y = joyY;
+    const now = performance.now();
+    const dt = joyStamp ? Math.min(0.05, (now - joyStamp) / 1000) : 0.016;
+    joyStamp = now;
+    const k = 1 - Math.exp(-dt * 16);
+    joySmX += (joyX - joySmX) * k;
+    joySmY += (joyY - joySmY) * k;
+    let x = joySmX;
+    let y = joySmY;
     if (keys.has('KeyD')) x += 1;
     if (keys.has('KeyA')) x -= 1;
     if (keys.has('KeyW')) y += 1;
@@ -203,7 +249,7 @@ export function createInput() {
   }
 
   function consumeLook() {
-    const d = { x: look.x, y: look.y };
+    const d = { x: look.x, y: look.y, touch: look.touch };
     look.x = 0;
     look.y = 0;
     return d;
@@ -214,12 +260,14 @@ export function createInput() {
       reload: edges.reload,
       ability: edges.ability,
       swap: edges.swap,
+      pause: edges.pause,
       slots: edges.slots.slice(),
       fireEdge: edges.fireEdge,
     };
     edges.reload = false;
     edges.ability = false;
     edges.swap = false;
+    edges.pause = false;
     edges.fireEdge = false;
     edges.slots.length = 0;
     return out;
@@ -232,5 +280,7 @@ export function createInput() {
     consumeLook,
     consumeEdges,
     fireHeld: () => fire,
+    adsHeld: () => ads || keys.has('KeyV'),
+    settings: loadSettings,
   };
 }

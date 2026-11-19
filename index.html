@@ -28,6 +28,10 @@
       <h1>Zombie Shooter</h1>
       <p class="tag">Keep the light on.</p>
       <button id="enter" type="button">Enter the Dark</button>
+      <div class="row">
+        <button id="title-settings" type="button">Settings</button>
+        <button id="title-feedback" type="button">Feedback</button>
+      </div>
       <p id="title-controls" class="fine"></p>
     </div>
   </section>
@@ -67,6 +71,7 @@
   <div id="hud" class="hidden">
     <div id="top">
       <div id="obj"></div>
+      <button id="btn-pause" type="button">II</button>
       <div id="bossbar" class="hidden">
         <span>GRAVEWING</span>
         <div class="track"><i id="bossfill"></i></div>
@@ -94,6 +99,7 @@
     <div id="joy" class="hidden"><i></i></div>
     <div id="buttons">
       <button id="btn-swap" type="button">SWAP</button>
+      <button id="btn-aim" type="button">AIM</button>
       <button id="btn-ability" type="button">ABILITY</button>
       <button id="btn-reload" type="button">RELOAD</button>
       <button id="btn-fire" type="button">FIRE</button>
@@ -107,6 +113,70 @@
       <span>Zombie Shooter plays in landscape.</span>
     </div>
   </div>
+
+  <section id="pause" class="screen hidden">
+    <div class="panel">
+      <p class="eyebrow">Paused</p>
+      <h2>Hold still</h2>
+      <div class="row">
+        <button id="resume" type="button" class="primary">Resume</button>
+        <button id="pause-settings" type="button">Settings</button>
+        <button id="pause-feedback" type="button">Feedback</button>
+        <button id="pause-title" type="button">Title</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="settings" class="screen hidden">
+    <div class="panel wide">
+      <p class="eyebrow">Settings</p>
+      <h2>How it feels</h2>
+      <label>Look sensitivity <input id="set-look" type="range" min="0.2" max="3" step="0.05" /></label>
+      <label>Aim sensitivity <input id="set-aim" type="range" min="0.2" max="3" step="0.05" /></label>
+      <label>Look smoothing <input id="set-smooth" type="range" min="0" max="1" step="0.01" /></label>
+      <label class="check"><input id="set-invert" type="checkbox" /> Invert Y</label>
+      <label>Graphics
+        <select id="set-quality">
+          <option value="auto">Auto</option>
+          <option value="low">Low</option>
+          <option value="high">High</option>
+        </select>
+      </label>
+      <p id="set-readout" class="fine"></p>
+      <div class="row">
+        <button id="settings-close" type="button" class="primary">Done</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="feedback" class="screen hidden">
+    <form id="feedback-form" class="panel wide">
+      <p class="eyebrow">Feedback</p>
+      <h2>Tell Michael</h2>
+      <div id="stars" class="stars" role="radiogroup" aria-label="Rating"></div>
+      <textarea id="fb-text" rows="4" maxlength="2000" placeholder="What worked, what didn't"></textarea>
+      <input id="fb-email" type="email" maxlength="120" placeholder="Email (optional)" />
+      <label class="check"><input id="fb-bug" type="checkbox" /> This is a bug report</label>
+      <p id="fb-meta" class="fine"></p>
+      <div class="row">
+        <button type="submit" class="primary">Send</button>
+        <button id="feedback-close" type="button">Close</button>
+      </div>
+    </form>
+  </section>
+
+  <section id="rating" class="screen hidden">
+    <div class="panel">
+      <p class="eyebrow">A quiet moment</p>
+      <h2>Rate the hunt?</h2>
+      <p>If that run felt good, a star helps. You won't see this again for a while.</p>
+      <div id="rate-stars" class="stars"></div>
+      <div class="row">
+        <button id="rating-note" type="button">Send a note</button>
+        <button id="rating-dismiss" type="button">Not now</button>
+      </div>
+    </div>
+  </section>
 
   <div id="fatal" class="hidden"></div>
   <script type="module" src="/src/main.js"></script>

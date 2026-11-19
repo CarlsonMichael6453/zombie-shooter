@@ -5,11 +5,13 @@ import {
   SRGBColorSpace, ACESFilmicToneMapping, CircleGeometry, BackSide, CatmullRomCurve3,
 } from 'three';
 import { CHARACTERS, WEAPONS, CAVE, BOSS, BUG, VOICE, EYE, BASE_HP } from './config.js';
-import { flash, litMat, paint, setAtmosphere } from './materials.js';
+import { flash, litMat, puddleMat, paint, setAtmosphere } from './materials.js';
 import {
-  createWallskitter, createBird, poseBird, createWeaponModel, createMedkit, createAmmoCrate,
-  createTree, createRock, createSentry, createDrips, createDust, createRing, stalactite,
+  createWallskitter, stepBug, createBird, poseBird, createWeaponModel, createMedkit, createAmmoCrate,
+  createGrove, createTree, createRock, createSentry, createDrips, createDust, createRing, stalactite,
 } from './models.js';
+import { createComposer, gradeTime } from './post.js';
+import { loadSettings, resolvedQuality } from './settings.js';
 
 const UP = new Vector3(0, 1, 0);
 
@@ -83,6 +85,11 @@ export class Game {
     this.slotIndex = 0;
 
     const coarse = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+    this.quality = resolvedQuality(loadSettings());
+    this.sYaw = 0;
+    this.sPitch = 0;
+    this.ads = false;
+    this.userPause = false;
     this.renderer = new WebGLRenderer({
       canvas,
       antialias: !coarse,
@@ -93,7 +100,8 @@ export class Game {
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.toneMapping = ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, coarse ? 1.5 : 1.75));
+    const cap = this.quality === 'high' ? (coarse ? 1.75 : 2) : 1.5;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, cap));
     this.renderer.setClearColor(0x070b10, 1);
 
     this.scene = new Scene();
@@ -141,6 +149,7 @@ export class Game {
       this.tracers.push({ line, life: 0 });
     }
 
+    this.mountComposer();
     this.resize();
     window.addEventListener('resize', () => this.resize());
     this.last = performance.now();
@@ -156,7 +165,12 @@ export class Game {
       if (dt > 0.05) dt = 0.05;
       if (dt < 0) dt = 0;
       this.update(dt);
-      this.renderer.render(this.scene, this.camera);
+      if (this.composer) {
+        gradeTime(this.composer, this.time);
+        this.composer.render();
+      } else {
+        this.renderer.render(this.scene, this.camera);
+      }
       this.frame += 1;
     };
     requestAnimationFrame(loop);
@@ -168,6 +182,17 @@ export class Game {
     this.camera.aspect = w / Math.max(1, h);
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h, false);
+    this.composer?.setSize(w, h);
+  }
+
+  mountComposer() {
+    try {
+      this.composer = createComposer(this.renderer, this.scene, this.camera, this.quality);
+      this.composer.setSize(window.innerWidth, window.innerHeight);
+    } catch (err) {
+      console.warn('post', err);
+      this.composer = null;
+    }
   }
 
   current() {
@@ -249,6 +274,7 @@ export class Game {
   }
 
   pauseForBackground() {
+    this.bgPaused = true;
     this.paused = true;
     this.input.setEnabled(false);
     if (document.pointerLockElement) document.exitPointerLock();
@@ -256,9 +282,17 @@ export class Game {
 
   resumeFromBackground() {
     this.last = performance.now();
-    this.paused = false;
+    this.bgPaused = false;
+    if (!this.userPause) this.paused = false;
     const playing = document.documentElement.classList.contains('playing');
-    if (this.running && playing && !this.dead && !this.won) this.input.setEnabled(true);
+    if (this.running && playing && !this.dead && !this.won && !this.userPause) this.input.setEnabled(true);
+  }
+
+  setUserPause(on) {
+    this.userPause = on;
+    this.paused = on || !!this.bgPaused;
+    if (on) this.input.setEnabled(false);
+    else if (this.running && !this.dead && !this.won) this.input.setEnabled(true);
   }
 
   stop() {
@@ -314,9 +348,10 @@ export class Game {
       pts.push(new Vector3(x, y, z));
     }
     const curve = new CatmullRomCurve3(pts);
-    const rings = 140;
-    const segs = 14;
+    const rings = this.quality === 'high' ? 160 : 100;
+    const segs = this.quality === 'high' ? 22 : 16;
     const positions = [];
+    const uvs = [];
     const frames = [];
     let up = new Vector3(0, 1, 0);
     for (let i = 0; i <= rings; i++) {
@@ -336,12 +371,22 @@ export class Game {
         const a = (k / segs) * Math.PI * 2;
         let cx = Math.cos(a);
         let cy = Math.sin(a);
-        if (cy < 0) cy *= 0.42;
-        const yScale = 0.78;
-        const x = p.x + bin.x * cx * radius + up.x * cy * radius * yScale;
-        const y = p.y + bin.y * cx * radius + up.y * cy * radius * yScale;
-        const z = p.z + bin.z * cx * radius + up.z * cy * radius * yScale;
+        if (cy < 0) cy *= 0.38;
+        const yScale = 0.86;
+        const rock = Math.sin(a * 1.15 + i * 0.19) * 0.55
+          + Math.sin(a * 2.7 - i * 0.13) * 0.32
+          + Math.sin(i * 0.37 + a * 0.4) * 0.22
+          + Math.sin(a * 6.2 + i * 0.7) * 0.12;
+        const disp = cy > 0.05 ? rock : rock * 0.22;
+        const rr = radius * (1.02 + disp * 0.72);
+        const lift = cy < 0
+          ? Math.sin(i * 0.71 + a * 2.6) * 0.28 + Math.sin(a * 6.2 + i * 0.33) * 0.1
+          : Math.sin(a * 3.4 + i * 0.47) * 0.16;
+        const x = p.x + bin.x * cx * rr + up.x * (cy * rr * yScale + lift);
+        const y = p.y + bin.y * cx * rr + up.y * (cy * rr * yScale + lift);
+        const z = p.z + bin.z * cx * rr + up.z * (cy * rr * yScale + lift);
         positions.push(x, y, z);
+        uvs.push(k / segs, t * 10);
         if (y < floorY) floorY = y;
         if (y > ceilY) ceilY = y;
       }
@@ -374,20 +419,20 @@ export class Game {
     }
     const geometry = new BufferGeometry();
     geometry.setAttribute('position', new BufferAttribute(new Float32Array(positions), 3));
+    geometry.setAttribute('aUv', new BufferAttribute(new Float32Array(uvs), 2));
     geometry.setIndex(indices);
-    geometry.computeVertexNormals();
     paint(geometry, (c, x, y, z, i) => {
       const ring = Math.floor(i / segs);
       const f = frames[Math.min(frames.length - 1, ring)];
       const h = (y - f.floorY) / Math.max(0.5, f.ceilY - f.floorY);
       const n = hash(i * 1.3);
-      let r = 0.18 + n * 0.07;
-      let gch = 0.2 + n * 0.06;
-      let b = 0.26 + n * 0.08;
-      if (h < 0.22) {
-        r += 0.03;
-        gch += 0.04;
-        b += 0.08;
+      let r = 0.1 + n * 0.06;
+      let gch = 0.14 + n * 0.05;
+      let b = 0.2 + n * 0.08;
+      if (h < 0.2) {
+        r += 0.02;
+        gch += 0.05;
+        b += 0.1;
       }
       if (n > 0.94) gch += 0.04;
       if (f.t > 0.9) {
@@ -396,26 +441,47 @@ export class Game {
       }
       c.setRGB(r, gch, b);
     });
-    const caveMat = litMat(0xffffff, DoubleSide);
-    const caveMesh = new Mesh(geometry, caveMat);
+    const faceted = geometry.toNonIndexed();
+    faceted.computeVertexNormals();
+    geometry.dispose();
+    const caveMat = litMat(0xffffff, DoubleSide, { gloss: 0.62, bump: 0.9, uvRepeat: 2.4 });
+    const caveMesh = new Mesh(faceted, caveMat);
     const root = new Group();
     root.add(caveMesh);
     this.frames = frames;
     this.caveSolids = [caveMesh];
     this.caveColliders = [];
 
-    for (let i = 4; i < frames.length; i += 6) {
+    this.puddles = [];
+    for (let i = 6; i < frames.length; i += 7) {
       const f = frames[i];
-      const hang = stalactite();
-      const len = 0.7 + hash(i) * 1.3;
-      hang.scale.set(0.8 + hash(i + 2), len, 0.8 + hash(i + 3));
-      hang.position.set(
-        f.p.x + f.up.x * (f.ceilY - f.p.y) * 0.92,
-        f.ceilY - 0.15,
-        f.p.z + f.up.z * 0.2,
-      );
-      hang.rotation.x = Math.PI;
-      root.add(hang);
+      const puddle = new Mesh(new CircleGeometry(0.85 + hash(i) * 1.1, 14), puddleMat());
+      puddle.rotation.x = -Math.PI / 2;
+      puddle.position.set(f.p.x + f.bin.x * (hash(i + 1) - 0.5) * 0.8, f.floorY + 0.05, f.p.z);
+      root.add(puddle);
+      this.puddles.push(puddle);
+    }
+
+    for (let i = 3; i < frames.length; i += 3) {
+      const f = frames[i];
+      const cluster = 1 + (i % 5 === 0 ? 2 : i % 2);
+      for (let k = 0; k < cluster; k++) {
+        const hang = stalactite();
+        const len = 0.7 + hash(i + k * 3) * 1.8;
+        const side = (hash(i * 3 + k) - 0.5) * f.radius * 0.85;
+        hang.scale.set(0.45 + hash(i + k) * 0.85, len, 0.45 + hash(i + k + 2) * 0.7);
+        hang.position.copy(f.p)
+          .addScaledVector(f.up, f.radius * (0.55 + hash(i + k) * 0.2))
+          .addScaledVector(f.bin, side);
+        hang.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), f.up.clone().negate());
+        root.add(hang);
+      }
+      if (i % 8 === 0) {
+        const spike = stalactite();
+        spike.scale.set(0.45 + hash(i + 9) * 0.7, 0.55 + hash(i + 4) * 1.1, 0.5);
+        spike.position.set(f.p.x + f.bin.x * (hash(i) - 0.5) * f.radius * 0.4, f.floorY, f.p.z);
+        root.add(spike);
+      }
       if (i % 12 === 0) {
         const rock = createRock();
         const side = i % 24 === 0 ? 1 : -1;
@@ -432,7 +498,7 @@ export class Game {
       }
     }
 
-    const drips = createDrips(70, frames);
+    const drips = createDrips(this.quality === 'high' ? 140 : 80, frames);
     root.add(drips.points);
     this.drips = drips;
 
@@ -458,7 +524,7 @@ export class Game {
     const groundGeo = new CircleGeometry(62, 28);
     paint(groundGeo, (c, x, y, z, i) => {
       const n = hash(i + x * 2.2 + y * 1.7);
-      c.setRGB(0.08 + n * 0.04, 0.1 + n * 0.045, 0.07 + n * 0.025);
+      c.setRGB(0.16 + n * 0.06, 0.18 + n * 0.05, 0.14 + n * 0.04);
     });
     groundGeo.rotateX(-Math.PI / 2);
     const ground = new Mesh(groundGeo, litMat(0xffffff));
@@ -466,23 +532,31 @@ export class Game {
     this.forestSolids = [ground];
     this.forestColliders = [];
 
-    for (let i = 0; i < 34; i++) {
-      const ang = (i / 34) * Math.PI * 2 + hash(i) * 0.4;
-      const rad = 14 + hash(i + 3) * 22;
+    const count = this.quality === 'high' ? 78 : 44;
+    const spots = [];
+    for (let i = 0; i < count; i++) {
+      const ang = (i / count) * Math.PI * 2 + hash(i) * 0.55;
+      const rad = 8 + hash(i + 3) * 28;
       const x = Math.cos(ang) * rad;
       const z = Math.sin(ang) * rad;
-      if (Math.abs(x) < 5.5 && z > 14) continue;
-      const tree = createTree();
-      const s = 0.85 + hash(i + 8) * 0.7;
-      tree.scale.setScalar(s);
-      tree.position.set(x, 0, z);
-      tree.rotation.y = hash(i + 4) * 6;
-      root.add(tree);
+      if (Math.abs(x) < 4.2 && z > 12 && z < 28) continue;
+      const s = 0.85 + hash(i + 8) * 1.15;
+      spots.push({ x, z, s, rot: hash(i + 4) * 6 });
       this.forestColliders.push({ x, z, r: 0.55 * s });
-      tree.traverse((o) => {
-        if (o.isMesh) this.forestSolids.push(o);
-      });
     }
+    for (const mesh of createGrove(spots)) {
+      root.add(mesh);
+      this.forestSolids.push(mesh);
+    }
+    const heroes = [[7, 5], [-8, 7], [10, -3], [-6, -5], [13, 11], [-13, 1], [5, -11], [-3, 16], [16, 3], [-15, -7], [0, -8], [9, 16]];
+    heroes.forEach(([x, z], i) => {
+      const tree = createTree();
+      tree.position.set(x, 0, z);
+      tree.scale.setScalar(1.15 + (i % 4) * 0.28);
+      root.add(tree);
+      this.forestSolids.push(tree);
+      this.forestColliders.push({ x, z, r: 0.6 });
+    });
     for (let i = 0; i < 10; i++) {
       const rock = createRock();
       const ang = hash(i + 20) * Math.PI * 2;
@@ -710,9 +784,25 @@ export class Game {
   simulate(dt) {
     const edges = this.input.consumeEdges();
     const look = this.input.consumeLook();
-    this.yaw -= look.x;
-    this.pitch = clamp(this.pitch + look.y, -1.15, 1.15);
-    this.sway += (clamp(-look.x * 0.8, -0.08, 0.08) - this.sway) * Math.min(1, dt * 8);
+    const st = loadSettings();
+    const mult = (this.ads ? st.aim : st.look);
+    const base = look.touch ? 0.0048 : 0.00215;
+    const sens = base * mult;
+    let yawDelta = look.x * sens;
+    let pitchDelta = -look.y * sens;
+    if (st.invertY) pitchDelta = -pitchDelta;
+    const k = st.smooth < 0.02 ? 1 : 1 - Math.exp(-dt * (52 - st.smooth * 38));
+    this.sYaw += (yawDelta - this.sYaw) * k;
+    this.sPitch += (pitchDelta - this.sPitch) * k;
+    this.yaw -= this.sYaw;
+    this.pitch = clamp(this.pitch + this.sPitch, -1.15, 1.15);
+    this.ads = this.input.adsHeld();
+    const targetFov = this.ads ? 50 : 72;
+    if (Math.abs(this.camera.fov - targetFov) > 0.05) {
+      this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 12);
+      this.camera.updateProjectionMatrix();
+    }
+    this.sway += (clamp(-this.sYaw * 0.8, -0.08, 0.08) - this.sway) * Math.min(1, dt * 8);
 
     this.applyView();
     this.camera.getWorldDirection(this.forward);
@@ -1286,6 +1376,12 @@ export class Game {
       if (e.mat?.uniforms?.uFlash) {
         e.mat.uniforms.uFlash.value = Math.max(0, e.mat.uniforms.uFlash.value - dt * 3);
       }
+      if (e.state === 'still') {
+        stepBug(e.mesh, this.time, false);
+        continue;
+      }
+      const crawling = e.state !== 'drop';
+      stepBug(e.mesh, this.time, crawling && e.state !== 'cling' ? true : e.state === 'cling');
       const target = this.hiddenT > 0 ? this.lastSeen : this.feet;
       if (e.state === 'cling') {
         const dir = Math.sign(this.playerT - e.t);
@@ -1306,8 +1402,8 @@ export class Game {
         e.vy -= 16 * dt;
         e.pos.y += e.vy * dt;
         const f = this.nearestFrame(e.pos.x, e.pos.z);
-        if (e.pos.y <= f.floorY + 0.32) {
-          e.pos.y = f.floorY + 0.32;
+        if (e.pos.y <= f.floorY + 0.55) {
+          e.pos.y = f.floorY + 0.55;
           e.state = 'ground';
         }
         e.mesh.position.copy(e.pos);
@@ -1330,7 +1426,7 @@ export class Game {
             e.pos.x = f.p.x + (ox / od) * maxR;
             e.pos.z = f.p.z + (oz / od) * maxR;
           }
-          e.pos.y = f.floorY + 0.32;
+          e.pos.y = f.floorY + 0.55;
         }
         e.mesh.position.copy(e.pos);
         e.mesh.up.copy(UP);
@@ -1662,6 +1758,11 @@ export class Game {
       positions[i * 3 + 2] = drop.z;
     }
     this.drips.points.geometry.attributes.position.needsUpdate = true;
+    if (this.puddles) {
+      for (const puddle of this.puddles) {
+        if (puddle.material.uniforms?.uTime) puddle.material.uniforms.uTime.value = this.time;
+      }
+    }
     this.dripT -= dt;
     if (this.dripT <= 0) {
       this.dripT = 0.75 + Math.random() * 1.4;
@@ -1721,6 +1822,7 @@ export class Game {
     if (token !== this.token) return;
     this.inputLock = false;
     this.transitioning = false;
+    this.hooks.onCalm?.('cave');
   }
 
   refreshHud() {

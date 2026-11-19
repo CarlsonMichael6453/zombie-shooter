@@ -25,6 +25,7 @@ page.on('pageerror', (err) => errors.push(String(err)));
 page.on('console', (msg) => {
   if (msg.type() === 'error') errors.push(msg.text());
 });
+await page.evaluateOnNewDocument(() => localStorage.setItem('zs-rate-at', String(Date.now())));
 await page.setViewport({ width: 1280, height: 720 });
 
 function fail(msg) {
