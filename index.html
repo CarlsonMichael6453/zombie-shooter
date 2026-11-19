@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#07090d" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="description" content="Zombie Shooter — a flashlight-lit 3D horror shooter. Mature 17+." />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Zombie Shooter" />
+  <meta name="format-detection" content="telephone=no" />
+  <title>Zombie Shooter</title>
+  <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="%BASE_URL%icons/apple-touch-icon.png" />
+  <link rel="icon" href="%BASE_URL%icons/icon-192.png" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div id="fade"></div>
+  <div id="hurt"></div>
+
+  <section id="title" class="screen">
+    <div class="title-inner">
+      <p class="eyebrow">Mature 17+ · Strong language</p>
+      <h1>Zombie Shooter</h1>
+      <p class="tag">Keep the light on.</p>
+      <button id="enter" type="button">Enter the Dark</button>
+      <p id="title-controls" class="fine"></p>
+    </div>
+  </section>
+
+  <section id="select" class="screen hidden">
+    <header class="select-head">
+      <p class="eyebrow">Choose your hunter</p>
+      <h2>Three ways to die slower</h2>
+    </header>
+    <div id="cards"></div>
+  </section>
+
+  <section id="over" class="screen hidden">
+    <div class="panel">
+      <p class="eyebrow">You died</p>
+      <h2>The dark kept you</h2>
+      <p id="over-msg"></p>
+      <div class="row">
+        <button id="retry" type="button" class="primary">Retry</button>
+        <button id="to-select" type="button">Character Select</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="win" class="screen hidden">
+    <div class="panel">
+      <p class="eyebrow">Gravewing falls</p>
+      <h2>The clearing goes quiet</h2>
+      <p id="win-msg"></p>
+      <div class="row">
+        <button id="again" type="button" class="primary">Haunt it again</button>
+        <button id="win-select" type="button">Character Select</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="hud" class="hidden">
+    <div id="top">
+      <div id="obj"></div>
+      <div id="bossbar" class="hidden">
+        <span>GRAVEWING</span>
+        <div class="track"><i id="bossfill"></i></div>
+      </div>
+    </div>
+    <div id="cross"><b></b><b></b><b></b><b></b></div>
+    <div id="feed"></div>
+    <div id="toast"></div>
+    <div id="sub"></div>
+    <div id="bossintro" class="hidden">
+      <p id="boss-kicker">IT WAS NEVER A BIRD</p>
+      <h2>GRAVEWING</h2>
+    </div>
+    <div id="hint"></div>
+    <div id="cluster">
+      <div id="hp"><i id="hpfill"></i><b id="hptxt">100</b></div>
+      <div id="ability"><b id="aname">ABILITY</b><em id="acd">READY</em></div>
+      <div id="weapon"><b id="wname">Weapon</b><em id="ammo">—</em><div id="pips"></div></div>
+    </div>
+  </div>
+
+  <div id="touch-layer">
+    <div id="move-zone"></div>
+    <div id="look-zone"></div>
+    <div id="joy" class="hidden"><i></i></div>
+    <div id="buttons">
+      <button id="btn-swap" type="button">SWAP</button>
+      <button id="btn-ability" type="button">ABILITY</button>
+      <button id="btn-reload" type="button">RELOAD</button>
+      <button id="btn-fire" type="button">FIRE</button>
+    </div>
+  </div>
+
+  <div id="rotate">
+    <div>
+      <div class="phone"></div>
+      <b>Rotate your phone</b>
+      <span>Zombie Shooter plays in landscape.</span>
+    </div>
+  </div>
+
+  <div id="fatal" class="hidden"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
