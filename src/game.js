@@ -5,10 +5,11 @@ import {
   SRGBColorSpace, ACESFilmicToneMapping, CircleGeometry, BackSide, CatmullRomCurve3,
 } from 'three';
 import { CHARACTERS, WEAPONS, CAVE, BOSS, BUG, VOICE, EYE, BASE_HP } from './config.js';
-import { flash, litMat, puddleMat, paint, setAtmosphere } from './materials.js';
+import { flash, litMat, puddleMat, paint, setAtmosphere, setDetail, pbrMat, texturesReady } from './materials.js';
 import {
   createWallskitter, stepBug, createBird, poseBird, createWeaponModel, createMedkit, createAmmoCrate,
   createGrove, createTree, createRock, createSentry, createDrips, createDust, createRing, stalactite,
+  createBeam,
 } from './models.js';
 import { createComposer, gradeTime } from './post.js';
 import { loadSettings, resolvedQuality } from './settings.js';
@@ -99,7 +100,9 @@ export class Game {
     });
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.toneMapping = ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 1.14;
+    setDetail(this.quality);
+    this.texturesReady = texturesReady;
     const cap = this.quality === 'high' ? (coarse ? 1.75 : 2) : 1.5;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, cap));
     this.renderer.setClearColor(0x070b10, 1);
@@ -114,7 +117,9 @@ export class Game {
     this.view = new Group();
     this.view.position.set(0.36, -0.3, -0.72);
     this.camera.add(this.view);
-    const dust = createDust();
+    const dust = createDust(this.quality === 'high' ? 72 : 28);
+    this.shaft = createBeam();
+    this.camera.add(this.shaft);
     this.dust = dust;
     this.camera.add(dust.points);
 
@@ -441,11 +446,11 @@ export class Game {
       }
       c.setRGB(r, gch, b);
     });
-    const faceted = geometry.toNonIndexed();
-    faceted.computeVertexNormals();
-    geometry.dispose();
-    const caveMat = litMat(0xffffff, DoubleSide, { gloss: 0.62, bump: 0.9, uvRepeat: 2.4 });
-    const caveMesh = new Mesh(faceted, caveMat);
+    geometry.computeVertexNormals();
+    const caveMat = pbrMat('rock', 0x9eb4c2, {
+      side: DoubleSide, gloss: 0.46, uvRepeat: 1.35, normalAmt: 0.38, roughBias: 0.02,
+    });
+    const caveMesh = new Mesh(geometry, caveMat);
     const root = new Group();
     root.add(caveMesh);
     this.frames = frames;
@@ -527,7 +532,9 @@ export class Game {
       c.setRGB(0.16 + n * 0.06, 0.18 + n * 0.05, 0.14 + n * 0.04);
     });
     groundGeo.rotateX(-Math.PI / 2);
-    const ground = new Mesh(groundGeo, litMat(0xffffff));
+    const ground = new Mesh(groundGeo, pbrMat('ground', 0x46525c, {
+      gloss: 0.22, uvRepeat: 10, normalAmt: 0.85, roughBias: 0.05,
+    }));
     root.add(ground);
     this.forestSolids = [ground];
     this.forestColliders = [];
@@ -872,6 +879,12 @@ export class Game {
   updateUniforms() {
     flash.uCamPos.value.copy(this.camera.position);
     this.camera.getWorldDirection(flash.uCamDir.value);
+    flash.uTime.value = this.time;
+    if (this.shaft) {
+      const pulse = 0.04 + Math.sin(this.time * 1.15) * 0.012;
+      this.shaft.material.opacity = this.level === 'cave' ? pulse : pulse * 0.25;
+      this.shaft.visible = this.quality === 'high';
+    }
   }
 
   updateViewmodel(dt) {

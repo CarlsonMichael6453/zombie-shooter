@@ -3,10 +3,45 @@ import {
   TorusGeometry, BufferGeometry, BufferAttribute, Float32BufferAttribute,
   MeshBasicMaterial, CanvasTexture, SRGBColorSpace, DoubleSide, Points, PointsMaterial,
   Shape, ExtrudeGeometry, CircleGeometry, RingGeometry, IcosahedronGeometry,
-  BackSide, AdditiveBlending, PlaneGeometry,
+  BackSide, AdditiveBlending, PlaneGeometry, LatheGeometry, Vector2,
 } from 'three';
-import { solid, litMat, ensureColor, paint } from './materials.js';
+import { solid, litMat, ensureColor, paint, pbrMat, shellNormal } from './materials.js';
 
+const SHELL = shellNormal();
+
+let featherTex;
+function featherMap() {
+  if (featherTex) return featherTex;
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 320;
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, 128, 320);
+  g.beginPath();
+  g.moveTo(64, 8);
+  g.bezierCurveTo(120, 48, 118, 190, 64, 308);
+  g.bezierCurveTo(10, 190, 8, 48, 64, 8);
+  g.fillStyle = '#b7c3d0';
+  g.fill();
+  g.strokeStyle = 'rgba(48, 42, 72, 0.95)';
+  g.lineWidth = 1.5;
+  for (let i = 0; i < 16; i++) {
+    const y = 28 + i * 16;
+    g.beginPath();
+    g.moveTo(64, y);
+    g.lineTo(18, y + 22);
+    g.moveTo(64, y);
+    g.lineTo(110, y + 22);
+    g.stroke();
+  }
+  g.fillStyle = 'rgba(64, 55, 109, 0.55)';
+  g.fillRect(54, 36, 20, 210);
+  const tex = new CanvasTexture(c);
+  tex.colorSpace = SRGBColorSpace;
+  tex.userData.shared = true;
+  featherTex = tex;
+  return tex;
+}
 const GEO = {};
 function geo(name, build) {
   if (!GEO[name]) {
@@ -28,83 +63,105 @@ function basic(name, color, extra = {}) {
 
 export function createWallskitter() {
   const root = new Group();
-  const mat = litMat(0x123056, undefined, { gloss: 0.94, bump: 0.7, uvRepeat: 2.2 });
-  const plate = litMat(0x0d2244, undefined, { gloss: 0.88, bump: 0.45, uvRepeat: 1.6 });
+  const mat = litMat(0x24365c, undefined, {
+    gloss: 0.9, uvRepeat: 3.4, normalAmt: 0.42, normalMap: SHELL,
+  });
+  const dark = litMat(0x182848, undefined, {
+    gloss: 0.86, uvRepeat: 3, normalAmt: 0.3, normalMap: SHELL,
+  });
   root.userData.mat = mat;
   const legs = [];
 
-  const abdomen = new Mesh(geo('bugAbd', () => {
-    const g = new SphereGeometry(0.42, 14, 12);
-    g.scale(0.78, 0.42, 1.25);
+  const body = new Mesh(geo('bugLathe', () => {
+    const pts = [
+      [0.02, 0],
+      [0.08, 0.07],
+      [0.18, 0.18],
+      [0.32, 0.36],
+      [0.46, 0.55],
+      [0.52, 0.72],
+      [0.44, 0.86],
+      [0.26, 0.98],
+      [0.1, 1.06],
+      [0.015, 1.1],
+    ].map(([x, y]) => new Vector2(x, y));
+    const g = new LatheGeometry(pts, 24);
+    g.rotateX(-Math.PI / 2);
+    g.scale(1.2, 0.4, 1.08);
     return g;
   }), mat);
-  abdomen.position.set(0, 0.02, 0.28);
-  root.add(abdomen);
+  root.add(body);
 
-  const point = new Mesh(geo('bugPoint', () => new ConeGeometry(0.16, 0.55, 6)), mat);
-  point.position.set(0, 0.08, 0.95);
-  point.rotation.x = -Math.PI / 2;
-  root.add(point);
+  const ridge = new Mesh(geo('bugRidgeLathe', () => {
+    const pts = [
+      [0.02, 0.12],
+      [0.07, 0.28],
+      [0.11, 0.52],
+      [0.12, 0.74],
+      [0.05, 0.92],
+      [0.01, 1.0],
+    ].map(([x, y]) => new Vector2(x, y));
+    const g = new LatheGeometry(pts, 12);
+    g.rotateX(-Math.PI / 2);
+    g.scale(0.62, 0.85, 0.96);
+    return g;
+  }), dark);
+  ridge.position.y = 0.1;
+  root.add(ridge);
 
-  const thorax = new Mesh(geo('bugThorax', () => {
-    const g = new SphereGeometry(0.36, 14, 12);
-    g.scale(1.05, 0.5, 0.82);
+  const face = new Mesh(geo('bugFace', () => {
+    const g = new SphereGeometry(0.2, 14, 12);
+    g.scale(1.25, 0.72, 0.7);
     return g;
   }), mat);
-  thorax.position.set(0, 0.05, -0.28);
-  root.add(thorax);
+  face.position.set(0, -0.02, -0.98);
+  face.userData.zone = 'head';
+  root.add(face);
 
-  for (let i = 0; i < 4; i++) {
-    const ridge = new Mesh(geo('bugRidge', () => {
-      const g = new SphereGeometry(0.16, 8, 6);
-      g.scale(0.7, 0.28, 1.1);
-      return g;
-    }), plate);
-    ridge.position.set(0, 0.2 - i * 0.02, 0.55 - i * 0.28);
-    ridge.scale.set(1.1 - i * 0.12, 1, 1);
-    root.add(ridge);
-  }
-
-  const head = new Mesh(geo('bugHead', () => new ConeGeometry(0.22, 0.48, 8)), mat);
-  head.position.set(0, 0.02, -0.72);
-  head.rotation.x = Math.PI / 2;
-  head.userData.zone = 'head';
-  root.add(head);
-
-  const eyeGeo = geo('bugEye', () => new SphereGeometry(0.11, 12, 10));
-  const eyeMat = basic('eye', 0xffffff);
+  const eyeGeo = geo('bugEye', () => new SphereGeometry(0.15, 16, 14));
+  const eyeMat = basic('eye', 0xf7f8ff);
   for (const side of [-1, 1]) {
     const eye = new Mesh(eyeGeo, eyeMat);
-    eye.position.set(side * 0.13, 0.04, -0.78);
-    eye.scale.set(0.7, 1.7, 0.55);
-    eye.rotation.z = side * -0.55;
+    eye.position.set(side * 0.16, 0.04, -1.12);
+    eye.scale.set(0.9, 1.65, 0.55);
+    eye.rotation.z = side * -0.42;
     eye.userData.zone = 'head';
     root.add(eye);
     const glow = new Mesh(
-      geo('bugGlow', () => new SphereGeometry(0.14, 8, 6)),
-      basic('eyeGlow', 0xf4fbff, { transparent: true, opacity: 0.55, depthWrite: false, blending: AdditiveBlending }),
+      geo('bugGlow', () => new SphereGeometry(0.18, 10, 8)),
+      basic('eyeGlow', 0xf4fbff, { transparent: true, opacity: 0.5, depthWrite: false, blending: AdditiveBlending }),
     );
     glow.position.copy(eye.position);
-    glow.scale.set(1.15, 1.9, 0.8);
+    glow.scale.set(1.15, 1.7, 0.75);
     root.add(glow);
   }
 
-  const upperGeo = geo('bugUpper', () => new CylinderGeometry(0.032, 0.022, 0.48, 5));
-  const lowerGeo = geo('bugLower', () => new CylinderGeometry(0.02, 0.012, 0.46, 5));
+  const coxaG = geo('bugCoxa', () => new CylinderGeometry(0.038, 0.028, 0.34, 7));
+  const femG = geo('bugFem', () => new CylinderGeometry(0.026, 0.016, 0.72, 7));
+  const tibG = geo('bugTib', () => new CylinderGeometry(0.014, 0.005, 0.78, 6));
   for (let i = 0; i < 5; i++) {
     for (const side of [-1, 1]) {
       const hip = new Group();
-      hip.position.set(side * 0.28, 0.02, -0.48 + i * 0.24);
-      const upper = new Mesh(upperGeo, mat);
-      upper.position.set(side * 0.16, -0.08, 0.02);
-      upper.rotation.z = side * -1.15;
-      upper.rotation.y = side * 0.25;
+      hip.position.set(side * 0.36, -0.02, 0.18 - i * 0.26);
+      hip.rotation.y = (i - 2) * 0.42;
+      const upper = new Mesh(coxaG, dark);
+      upper.position.set(side * 0.16, 0.0, 0);
+      upper.rotation.z = side * -1.5;
       const knee = new Group();
-      knee.position.set(side * 0.32, -0.16, 0.04);
-      const lower = new Mesh(lowerGeo, mat);
-      lower.position.set(side * 0.16, -0.16, 0.08);
-      lower.rotation.z = side * -0.45;
-      knee.add(lower);
+      knee.position.set(side * 0.32, -0.02, 0);
+      const fem = new Mesh(femG, mat);
+      fem.position.set(side * 0.28, -0.04, 0.02);
+      fem.rotation.z = side * -0.35;
+      fem.rotation.x = 0.2;
+      const ankle = new Group();
+      ankle.position.set(side * 0.52, -0.08, 0.04);
+      const tib = new Mesh(tibG, mat);
+      tib.position.set(side * 0.22, -0.1, 0.08);
+      tib.rotation.z = side * 0.15;
+      tib.rotation.x = 0.35;
+      ankle.add(tib);
+      knee.add(fem);
+      knee.add(ankle);
       hip.add(upper);
       hip.add(knee);
       root.add(hip);
@@ -112,18 +169,18 @@ export function createWallskitter() {
     }
   }
 
-  const ant = geo('bugAnt', () => new CylinderGeometry(0.012, 0.006, 0.7, 4));
+  const ant = geo('bugAnt', () => new CylinderGeometry(0.01, 0.004, 0.85, 5));
   for (const side of [-1, 1]) {
-    const mesh = new Mesh(ant, mat);
-    mesh.position.set(side * 0.08, -0.02, -0.95);
-    mesh.rotation.x = 1.35;
-    mesh.rotation.z = side * 0.22;
+    const mesh = new Mesh(ant, dark);
+    mesh.position.set(side * 0.07, -0.08, -1.22);
+    mesh.rotation.x = 1.45;
+    mesh.rotation.z = side * 0.18;
     root.add(mesh);
   }
 
   root.userData.legs = legs;
-  root.userData.body = thorax;
-  root.scale.setScalar(1.85);
+  root.userData.body = body;
+  root.scale.setScalar(1.35);
   root.traverse((o) => {
     if (o.isMesh) {
       o.userData.ownerKind = 'bug';
@@ -151,8 +208,7 @@ export function stepBug(root, time, moving) {
 export function createBird() {
   const root = new Group();
   const mat = litMat(0x1c1a24);
-  const wingMat = litMat(0x2c3344, DoubleSide, { gloss: 0.35, bump: 0.2 });
-  const wingCard = basic('wingCard', 0x1a2230, { side: DoubleSide });
+  const wingMat = litMat(0x2c3344, DoubleSide, { gloss: 0.35, normalAmt: 0.15 });
   root.userData.mats = [mat, wingMat];
 
   const torso = new Group();
@@ -174,21 +230,25 @@ export function createBird() {
   torso.add(neck);
 
   const head = new Group();
-  head.position.set(0, 1.05, -1.15);
+  head.position.set(0, 1.35, -1.35);
   torso.add(head);
   const skull = new Mesh(geo('birdHead', () => new SphereGeometry(0.48, 10, 8)), mat);
   skull.scale.set(0.85, 0.9, 1.15);
   skull.userData.zone = 'head';
   head.add(skull);
 
-  const beak = new Mesh(geo('birdBeak', () => new ConeGeometry(0.16, 0.7, 5)), mat);
-  beak.position.set(0, -0.05, -0.55);
-  beak.rotation.x = -Math.PI / 2;
+  const beak = new Mesh(geo('birdBeak', () => new ConeGeometry(0.2, 0.92, 7)), mat);
+  beak.position.set(0, 0.05, -0.7);
+  beak.rotation.x = -1.85;
   beak.userData.zone = 'head';
   head.add(beak);
-  const beakLow = new Mesh(geo('birdBeakLow', () => new ConeGeometry(0.1, 0.42, 4)), mat);
-  beakLow.position.set(0, -0.22, -0.38);
-  beakLow.rotation.x = -Math.PI / 2 - 0.7;
+  const hook = new Mesh(geo('birdHook', () => new ConeGeometry(0.09, 0.32, 6)), mat);
+  hook.position.set(0, -0.28, -1.02);
+  hook.rotation.x = -2.55;
+  head.add(hook);
+  const beakLow = new Mesh(geo('birdBeakLow', () => new ConeGeometry(0.12, 0.48, 6)), mat);
+  beakLow.position.set(0, -0.28, -0.48);
+  beakLow.rotation.x = -2.35;
   head.add(beakLow);
 
   const eye = new Mesh(geo('birdEye', () => new SphereGeometry(0.1, 8, 6)), basic('birdEye', 0xf7fbff));
@@ -228,50 +288,42 @@ export function createBird() {
     ensureColor(g);
     return g;
   });
-  const wingR = new Mesh(wingGeo, wingMat);
-  const wingL = new Mesh(wingLGeo, wingMat);
-  wingR.position.set(0.3, 0.2, 0.1);
-  wingL.position.set(-0.3, 0.2, 0.1);
-  const feather = geo('feather', () => new PlaneGeometry(0.7, 0.16));
-  for (const wing of [wingL, wingR]) {
-    const sign = wing === wingL ? -1 : 1;
-    for (let i = 0; i < 14; i++) {
-      const card = new Mesh(feather, wingMat);
-      const along = i / 13;
-      card.position.set(sign * (0.55 + along * 5.4), 0.55 - along * 1.15, 0.04 + (i % 3) * 0.03);
-      card.scale.set(0.7 + along * 0.9, 1.1 + (i % 2) * 0.35, 1);
-      card.rotation.z = sign * (0.35 - along * 0.7);
-      wing.add(card);
+  const wingR = new Group();
+  const wingL = new Group();
+  wingR.position.set(0.35, 0.25, -0.05);
+  wingL.position.set(-0.35, 0.25, -0.05);
+  wingR.add(new Mesh(wingGeo, wingMat));
+  wingL.add(new Mesh(wingLGeo, wingMat));
+  const featherMat = new MeshBasicMaterial({
+    map: featherMap(), color: 0xd7e0ea, transparent: true, alphaTest: 0.2, side: DoubleSide,
+  });
+  featherMat.userData.shared = true;
+  const sheenMat = featherMat.clone();
+  sheenMat.color.set(0x6d5a96);
+  sheenMat.userData.shared = true;
+  const cardGeo = geo('featherCard', () => new PlaneGeometry(1.25, 0.34));
+  function layFeathers(wing, sign) {
+    const rows = [
+      { y: 0.72, z: 0.08, reach: 4.6, count: 7, mat: featherMat, droop: 0.18 },
+      { y: 0.28, z: 0.0, reach: 6.2, count: 8, mat: sheenMat, droop: 0.28 },
+      { y: -0.18, z: -0.06, reach: 5.4, count: 8, mat: featherMat, droop: 0.42 },
+    ];
+    for (const row of rows) {
+      for (let i = 0; i < row.count; i++) {
+        const along = i / (row.count - 1);
+        const card = new Mesh(cardGeo, row.mat);
+        card.position.set(sign * (0.7 + along * row.reach), row.y - along * row.droop, row.z + (i % 2) * 0.02);
+        card.scale.set(0.75 + along * 0.55, 0.7 + (i % 3) * 0.15, 1);
+        card.rotation.z = sign * (-0.04 - along * 0.22);
+        card.rotation.y = Math.PI;
+        wing.add(card);
+      }
     }
   }
+  layFeathers(wingR, 1);
+  layFeathers(wingL, -1);
   torso.add(wingR);
   torso.add(wingL);
-
-  const purple = litMat(0x3a2060, DoubleSide, { gloss: 0.7, bump: 0.15 });
-  const vane = geo('vane', () => new PlaneGeometry(2.4, 0.55));
-  for (const side of [-1, 1]) {
-    for (let i = 0; i < 10; i++) {
-      const card = new Mesh(vane, wingCard);
-      const along = i / 9;
-      card.position.set(side * (0.5 + along * 5.2), 0.85 - along * 1.7, -0.15);
-      card.rotation.z = side * (0.25 + along * 0.85);
-      card.rotation.y = Math.PI;
-      card.scale.y = 0.7 + (i % 3) * 0.25;
-      torso.add(card);
-    }
-    const sheen = new Mesh(geo('sheen', () => new PlaneGeometry(2.2, 0.7)), purple);
-    sheen.position.set(side * 2.4, 0.15, -0.2);
-    sheen.rotation.y = Math.PI;
-    sheen.rotation.z = side * 0.4;
-    torso.add(sheen);
-  }
-
-  for (const wing of [wingL, wingR]) {
-    const sign = wing === wingL ? -1 : 1;
-    const patch = new Mesh(geo('patch', () => new PlaneGeometry(1.4, 0.55)), purple);
-    patch.position.set(sign * 2.6, 0.15, 0.05);
-    wing.add(patch);
-  }
 
   const tail = new Mesh(geo('tail', () => {
     const s = new Shape();
@@ -343,8 +395,8 @@ export function poseBird(root, stand, spread, flap) {
 
 export function createWeaponModel(view, glove = 0x5a4638) {
   const g = new Group();
-  const metal = new MeshBasicMaterial({ color: 0x8d939c });
-  const dark = new MeshBasicMaterial({ color: 0x2a2e34 });
+  const metal = new MeshBasicMaterial({ color: 0xb7bdc6 });
+  const dark = new MeshBasicMaterial({ color: 0x1c2026 });
   const wood = new MeshBasicMaterial({ color: 0x6b4a32 });
   const gloveMat = new MeshBasicMaterial({ color: glove });
   const accent = new MeshBasicMaterial({ color: 0xc4553a });
@@ -375,35 +427,51 @@ export function createWeaponModel(view, glove = 0x5a4638) {
     add(box(0.045, 0.12, 0.06, dark), 0, -0.04, 0.02);
     add(box(0.07, 0.06, 0.08, gloveMat), 0.01, -0.05, 0.04);
   } else if (view === 'cannon') {
-    add(cyl(0.028, 0.34, dark).rotateX(-Math.PI / 2), 0, 0.085, -0.2);
-    add(cyl(0.055, 0.12, metal).rotateX(-Math.PI / 2), 0, 0.05, -0.02);
-    add(box(0.02, 0.045, 0.02, metal), 0, 0.11, -0.34);
-    add(box(0.025, 0.06, 0.02, dark), 0, 0.09, 0.06);
-    add(box(0.055, 0.16, 0.065, wood), 0, -0.06, 0.05);
-    add(box(0.09, 0.07, 0.1, gloveMat), 0.02, -0.05, 0.06);
+    add(cyl(0.022, 0.42, dark).rotateX(-Math.PI / 2), 0, 0.09, -0.28);
+    add(cyl(0.034, 0.08, metal).rotateX(-Math.PI / 2), 0, 0.09, -0.46);
+    add(cyl(0.055, 0.14, metal).rotateX(-Math.PI / 2), 0, 0.055, -0.02);
+    add(box(0.012, 0.05, 0.016, metal), 0, 0.12, -0.46);
+    add(box(0.018, 0.07, 0.02, dark), 0, 0.1, 0.08);
+    add(box(0.05, 0.18, 0.055, wood), 0, -0.07, 0.06);
+    add(new Mesh(new TorusGeometry(0.045, 0.008, 6, 10), dark), 0, -0.02, 0.02);
+    add(box(0.09, 0.07, 0.1, gloveMat), 0.02, -0.06, 0.07);
   } else if (view === 'flare') {
     add(box(0.07, 0.08, 0.16, new MeshBasicMaterial({ color: 0x9a3a22 })), 0, 0.04, -0.06);
     add(cyl(0.03, 0.12, accent).rotateX(-Math.PI / 2), 0, 0.05, -0.18);
     add(box(0.05, 0.1, 0.05, dark), 0, -0.03, 0.02);
     add(box(0.08, 0.06, 0.08, gloveMat), 0, -0.04, 0.04);
   } else if (view === 'rifle') {
-    add(box(0.05, 0.06, 0.62, dark), 0, 0.04, -0.16);
-    add(cyl(0.015, 0.28, metal).rotateX(-Math.PI / 2), 0, 0.08, -0.42);
-    add(box(0.045, 0.1, 0.16, wood), 0, -0.02, 0.16);
-    add(box(0.04, 0.12, 0.05, dark), 0, -0.06, 0.02);
-    add(box(0.08, 0.06, 0.1, gloveMat), 0.02, -0.02, 0.08);
+    add(box(0.055, 0.07, 0.46, dark), 0, 0.045, -0.08);
+    add(box(0.06, 0.045, 0.28, dark), 0, 0.03, -0.28);
+    add(cyl(0.012, 0.34, metal).rotateX(-Math.PI / 2), 0, 0.075, -0.52);
+    add(cyl(0.02, 0.06, dark).rotateX(-Math.PI / 2), 0, 0.075, -0.7);
+    add(box(0.05, 0.16, 0.045, dark), 0, -0.02, -0.02);
+    add(box(0.04, 0.14, 0.05, dark), 0, -0.06, 0.02);
+    add(box(0.07, 0.05, 0.16, dark), 0.04, 0.08, -0.16);
+    add(box(0.045, 0.035, 0.07, metal), 0, 0.1, -0.02);
+    add(box(0.05, 0.055, 0.22, dark), 0, 0.02, 0.28);
+    add(box(0.04, 0.04, 0.08, metal), 0.045, 0.02, 0.22);
+    add(box(0.08, 0.055, 0.1, gloveMat), 0.02, -0.02, 0.06);
   } else if (view === 'shotgun') {
-    add(box(0.06, 0.07, 0.5, wood), 0, 0.03, -0.08);
-    add(cyl(0.02, 0.46, dark).rotateX(-Math.PI / 2), 0.018, 0.07, -0.22);
-    add(cyl(0.02, 0.46, dark).rotateX(-Math.PI / 2), -0.018, 0.07, -0.22);
-    add(box(0.05, 0.1, 0.14, wood), 0, -0.02, 0.18);
-    add(box(0.09, 0.06, 0.1, gloveMat), 0.02, -0.02, 0.1);
+    add(box(0.055, 0.07, 0.42, wood), 0, 0.03, -0.02);
+    add(cyl(0.018, 0.62, dark).rotateX(-Math.PI / 2), 0, 0.075, -0.32);
+    add(cyl(0.028, 0.16, dark).rotateX(-Math.PI / 2), 0, 0.045, -0.12);
+    add(box(0.05, 0.09, 0.2, wood), 0, -0.01, 0.22);
+    add(box(0.02, 0.035, 0.02, metal), 0, 0.1, -0.6);
+    for (let i = 0; i < 4; i++) {
+      add(cyl(0.012, 0.045, accent), 0.045, 0.02, 0.12 + i * 0.035);
+    }
+    add(box(0.09, 0.06, 0.1, gloveMat), 0.02, -0.02, 0.08);
   } else if (view === 'sniper') {
-    add(box(0.045, 0.055, 0.78, dark), 0, 0.04, -0.22);
-    add(cyl(0.012, 0.36, metal).rotateX(-Math.PI / 2), 0, 0.07, -0.55);
-    add(cyl(0.03, 0.12, dark).rotateX(-Math.PI / 2), 0, 0.12, -0.05);
-    add(box(0.04, 0.09, 0.16, wood), 0, -0.01, 0.2);
-    add(box(0.08, 0.055, 0.1, gloveMat), 0.02, -0.01, 0.12);
+    add(box(0.042, 0.05, 0.7, wood), 0, 0.03, -0.08);
+    add(cyl(0.01, 0.55, metal).rotateX(-Math.PI / 2), 0, 0.065, -0.62);
+    add(cyl(0.028, 0.16, dark).rotateX(-Math.PI / 2), 0, 0.13, -0.08);
+    add(cyl(0.02, 0.04, metal).rotateX(-Math.PI / 2), 0, 0.13, -0.16);
+    add(cyl(0.02, 0.04, metal).rotateX(-Math.PI / 2), 0, 0.13, 0.0);
+    add(box(0.012, 0.22, 0.012, dark), -0.04, -0.02, -0.35);
+    add(box(0.012, 0.22, 0.012, dark), 0.04, -0.02, -0.35);
+    add(box(0.04, 0.08, 0.22, wood), 0, -0.01, 0.28);
+    add(box(0.08, 0.05, 0.1, gloveMat), 0.02, -0.01, 0.1);
   } else if (view === 'arc') {
     const coilMat = new MeshBasicMaterial({ color: 0x67d4ff });
     add(box(0.08, 0.09, 0.4, dark), 0, 0.03, -0.1);
@@ -432,7 +500,7 @@ export function createWeaponModel(view, glove = 0x5a4638) {
   }
 
   const muzzle = new Group();
-  const tip = view === 'sniper' ? -0.75 : view === 'rifle' || view === 'shotgun' ? -0.5 : view === 'knife' || view === 'machete' ? -0.38 : -0.32;
+  const tip = view === 'sniper' ? -0.92 : view === 'rifle' ? -0.74 : view === 'shotgun' ? -0.66 : view === 'knife' || view === 'machete' ? -0.38 : view === 'cannon' ? -0.5 : -0.32;
   muzzle.position.set(0, 0.05, tip);
   g.add(muzzle);
   const flashMat = new MeshBasicMaterial({
@@ -475,9 +543,9 @@ export function createGrove(spots) {
   const trunkGeo = geo('groveTrunk', () => new CylinderGeometry(0.18, 0.38, 4.6, 6));
   const leafA = geo('groveLeafA', () => new ConeGeometry(1.7, 3.1, 7));
   const leafB = geo('groveLeafB', () => new ConeGeometry(1.25, 2.3, 6));
-  const trunks = new InstancedMesh(trunkGeo, litMat(0x6a4a32, undefined, { gloss: 0.12, bump: 0.3 }), spots.length);
-  const top = new InstancedMesh(leafA, litMat(0x3d6244, undefined, { gloss: 0.08, bump: 0.15 }), spots.length);
-  const mid = new InstancedMesh(leafB, litMat(0x4e7354, undefined, { gloss: 0.08 }), spots.length);
+  const trunks = new InstancedMesh(trunkGeo, pbrMat('bark', 0x3a2c22, { gloss: 0.18, uvRepeat: 1.4, normalAmt: 0.85 }), spots.length);
+  const top = new InstancedMesh(leafA, litMat(0x243428, undefined, { gloss: 0.08, normalAmt: 0.15 }), spots.length);
+  const mid = new InstancedMesh(leafB, litMat(0x2c4030, undefined, { gloss: 0.08, normalAmt: 0.1 }), spots.length);
   const dummy = new Object3D();
   spots.forEach((s, i) => {
     dummy.position.set(s.x, 2.3 * s.s, s.z);
@@ -585,8 +653,8 @@ export function createBeam() {
   return cone;
 }
 
-export function createDust() {
-  const n = 36;
+export function createDust(count = 36) {
+  const n = count;
   const positions = new Float32Array(n * 3);
   const spec = [];
   for (let i = 0; i < n; i++) {
@@ -639,8 +707,13 @@ function medkitTexture() {
   return tex;
 }
 
+let stalMat;
 export function stalactite() {
-  return solid(geo('stal', () => new ConeGeometry(0.12, 1.5, 5)), 0x4a5868);
+  if (!stalMat) {
+    stalMat = pbrMat('rock', 0x8ea4b0, { gloss: 0.62, uvRepeat: 1.2, normalAmt: 0.7, roughBias: -0.15 });
+    stalMat.userData.shared = true;
+  }
+  return new Mesh(geo('stal', () => new ConeGeometry(0.12, 1.5, 6)), stalMat);
 }
 
 export { BackSide };

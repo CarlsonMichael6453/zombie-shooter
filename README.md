@@ -33,7 +33,7 @@ On an iPhone, open that link in Safari, tap Share, then **Add to Home Screen**. 
 
 Weapon damage, magazines, and cooldowns are all in `src/config.js`. Feedback mail goes to `FEEDBACK_EMAIL` in that same file. Look sensitivity, aim sensitivity, invert Y, look smoothing, and graphics quality are stored in the browser under `zs-settings`.
 
-The cave, creatures, forest, and guns are procedural meshes with a canvas bump map. No third-party model pack is bundled. If you later drop in CC0 meshes (Poly Haven, ambientCG, Quaternius, Kenney), credit them here.
+The cave, creatures, forest, and guns are procedural meshes. Surface detail uses CC0 PBR maps from ambientCG, tinted toward the concept art: [Rock 020](https://ambientcg.com/view?id=Rock020), [Bark 012](https://ambientcg.com/view?id=Bark012), and [Ground 037](https://ambientcg.com/view?id=Ground037). Feather cards use a generated alpha texture. No third-party model pack is bundled.
 
 ## Levels
 
