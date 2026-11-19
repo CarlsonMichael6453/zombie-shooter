@@ -2,6 +2,7 @@ import { CHARACTERS, weaponName } from './config.js';
 import { createAudio } from './audio.js';
 import { createInput } from './input.js';
 import { Game } from './game.js';
+import { prepareShell, setAwake, watchAppState } from './native.js';
 
 const BASE = import.meta.env.BASE_URL;
 const params = new URLSearchParams(location.search);
@@ -111,11 +112,13 @@ function boot(id) {
   $('hud').classList.remove('hidden');
   input.setEnabled(true);
   game.start(id);
+  setAwake(true);
 }
 
 function backToSelect() {
   input.setEnabled(false);
   if (document.pointerLockElement) document.exitPointerLock();
+  setAwake(false);
   game.stop();
   $('hud').classList.add('hidden');
   audio.playPlaylist('menu');
@@ -240,6 +243,11 @@ function main() {
     $('fatal').classList.remove('hidden');
     $('fatal').textContent = 'WebGL is unavailable in this browser.';
   }
+  const unlockAudio = () => {
+    audio.ensure();
+    audio.resume().catch(() => {});
+  };
+  document.addEventListener('pointerdown', unlockAudio);
   $('enter').addEventListener('click', enter);
   $('retry').addEventListener('click', () => boot(characterId));
   $('again').addEventListener('click', () => boot(characterId));
@@ -247,8 +255,16 @@ function main() {
   $('win-select').addEventListener('click', backToSelect);
   if (params.has('debug')) window.__ZS = game;
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) audio.resume().catch(() => {});
+    if (document.hidden) {
+      game.pauseForBackground();
+      audio.suspend().catch(() => {});
+    } else {
+      audio.resume().catch(() => {});
+      game.resumeFromBackground();
+    }
   });
+  watchAppState(game, audio);
+  prepareShell();
 }
 
 main();

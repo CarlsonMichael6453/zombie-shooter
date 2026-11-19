@@ -1,0 +1,29 @@
+{
+  "appId": "com.carlsonmichael.zombieshooter",
+  "appName": "Zombie Shooter",
+  "webDir": "dist",
+  "backgroundColor": "#07090d",
+  "android": {
+    "backgroundColor": "#07090d"
+  },
+  "ios": {
+    "backgroundColor": "#07090d",
+    "contentInset": "never",
+    "allowsLinkPreview": false,
+    "scrollEnabled": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 800,
+      "launchAutoHide": true,
+      "backgroundColor": "#07090d",
+      "androidSplashResourceName": "splash",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "overlaysWebView": true,
+      "style": "DARK",
+      "backgroundColor": "#07090d"
+    }
+  }
+}

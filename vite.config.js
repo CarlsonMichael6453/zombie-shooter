@@ -1,7 +1,8 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/zombie-shooter/',
+  // Relative URLs so one dist works on GitHub Pages and inside Capacitor.
+  base: './',
   build: {
     target: 'es2020',
     sourcemap: false,
