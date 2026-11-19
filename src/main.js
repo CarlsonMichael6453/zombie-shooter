@@ -1,4 +1,5 @@
-import { CHARACTERS, weaponName } from './config.js';
+import { CHARACTERS, weaponName, APP_VERSION, FEEDBACK_EMAIL } from './config.js';
+import { loadSettings, saveSettings, resolvedQuality, shouldAskRating, markRatingAsked } from './settings.js';
 import { createAudio } from './audio.js';
 import { createInput } from './input.js';
 import { Game } from './game.js';
@@ -202,6 +203,154 @@ async function enter() {
   show('select');
 }
 
+let feedbackStars = 0;
+let settingsBack = 'title';
+
+function paintStars(root, value, onPick) {
+  root.replaceChildren();
+  for (let i = 1; i <= 5; i++) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = '★';
+    if (i <= value) b.classList.add('on');
+    b.addEventListener('click', () => onPick(i));
+    root.append(b);
+  }
+}
+
+function setFeedbackStars(n) {
+  feedbackStars = n;
+  paintStars($('stars'), n, setFeedbackStars);
+}
+
+function fillSettings() {
+  const s = loadSettings();
+  $('set-look').value = s.look;
+  $('set-aim').value = s.aim;
+  $('set-smooth').value = s.smooth;
+  $('set-invert').checked = s.invertY;
+  $('set-quality').value = s.quality;
+  const q = resolvedQuality(s);
+  $('set-readout').textContent = `Look ${Number(s.look).toFixed(2)}× · aim ${Number(s.aim).toFixed(2)}× · smoothing ${Math.round(s.smooth * 100)}% · graphics ${q}`;
+}
+
+function readSettings() {
+  const next = saveSettings({
+    look: Number($('set-look').value),
+    aim: Number($('set-aim').value),
+    smooth: Number($('set-smooth').value),
+    invertY: $('set-invert').checked,
+    quality: $('set-quality').value,
+  });
+  fillSettings();
+  if (game && resolvedQuality(next) !== game.quality) {
+    game.quality = resolvedQuality(next);
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    const cap = game.quality === 'high' ? (coarse ? 1.75 : 2) : 1.5;
+    game.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, cap));
+    game.resize();
+    game.mountComposer();
+  }
+}
+
+function openPanel(id, back) {
+  settingsBack = back;
+  if (id === 'settings') fillSettings();
+  if (id === 'feedback') {
+    setFeedbackStars(feedbackStars || 0);
+    $('fb-meta').textContent = `v${APP_VERSION} · ${navigator.userAgent}`;
+  }
+  show(id);
+}
+
+function closePanel() {
+  if (settingsBack === 'pause') show('pause');
+  else if (settingsBack === 'title') show('title');
+  else {
+    show(null);
+    $('hud').classList.remove('hidden');
+  }
+}
+
+function sendFeedback(stars, text, email, bug) {
+  const subject = bug ? 'Zombie Shooter bug' : 'Zombie Shooter feedback';
+  const body = [
+    `Rating: ${stars || 'none'}/5`,
+    `Bug report: ${bug ? 'yes' : 'no'}`,
+    '',
+    text || '(no comment)',
+    '',
+    `Email: ${email || '(none)'}`,
+    `Version: ${APP_VERSION}`,
+    `User-Agent: ${navigator.userAgent}`,
+  ].join('\n');
+  const href = `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.location.href = href;
+}
+
+function askRating(resumeAfter) {
+  if (!shouldAskRating()) return;
+  markRatingAsked();
+  $('rating').dataset.resume = resumeAfter ? '1' : '0';
+  const pickRate = (n) => {
+    $('rating').dataset.stars = String(n);
+    paintStars($('rate-stars'), n, pickRate);
+  };
+  paintStars($('rate-stars'), 0, pickRate);
+  $('rating').classList.remove('hidden');
+  if (resumeAfter && game?.running && !game.won && !game.dead) game.setUserPause(true);
+}
+
+function togglePause() {
+  if (!game?.running || game.dead || game.won || game.transitioning) return;
+  const on = !game.userPause;
+  game.setUserPause(on);
+  if (on) {
+    $('hud').classList.add('hidden');
+    show('pause');
+  } else {
+    show(null);
+    $('hud').classList.remove('hidden');
+  }
+}
+
+function wireMenus() {
+  $('title-settings').addEventListener('click', () => openPanel('settings', 'title'));
+  $('title-feedback').addEventListener('click', () => openPanel('feedback', 'title'));
+  $('pause-settings').addEventListener('click', () => openPanel('settings', 'pause'));
+  $('pause-feedback').addEventListener('click', () => openPanel('feedback', 'pause'));
+  $('settings-close').addEventListener('click', () => { readSettings(); closePanel(); });
+  for (const id of ['set-look', 'set-aim', 'set-smooth', 'set-invert', 'set-quality']) {
+    $(id).addEventListener('input', readSettings);
+  }
+  $('feedback-close').addEventListener('click', closePanel);
+  $('feedback-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    sendFeedback(feedbackStars, $('fb-text').value.trim(), $('fb-email').value.trim(), $('fb-bug').checked);
+  });
+  setFeedbackStars(0);
+  $('resume').addEventListener('click', togglePause);
+  $('btn-pause').addEventListener('click', (e) => { e.stopPropagation(); togglePause(); });
+  $('pause-title').addEventListener('click', () => {
+    game.setUserPause(false);
+    backToSelect();
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Escape') togglePause();
+  });
+  $('rating-dismiss').addEventListener('click', () => {
+    $('rating').classList.add('hidden');
+    if ($('rating').dataset.resume === '1') game.setUserPause(false);
+  });
+  $('rating-note').addEventListener('click', () => {
+    const stars = Number($('rating').dataset.stars || 0);
+    $('rating').classList.add('hidden');
+    feedbackStars = stars;
+    openPanel('feedback', game.won ? 'win' : 'hud');
+    setFeedbackStars(stars);
+  });
+}
+
 function main() {
   setTouchClass();
   window.addEventListener('resize', setTouchClass);
@@ -230,7 +379,9 @@ function main() {
           $('win-msg').textContent = msg;
           $('hud').classList.add('hidden');
           show('win');
+          askRating(false);
         },
+        onCalm() { askRating(true); },
       },
     });
   } catch (err) {
@@ -254,6 +405,7 @@ function main() {
   $('to-select').addEventListener('click', backToSelect);
   $('win-select').addEventListener('click', backToSelect);
   if (params.has('debug')) window.__ZS = game;
+  wireMenus();
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       game.pauseForBackground();

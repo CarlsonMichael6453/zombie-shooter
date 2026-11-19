@@ -10,9 +10,10 @@ On an iPhone, open that link in Safari, tap Share, then **Add to Home Screen**. 
 
 **Phone (landscape)**
 
-- Left side: virtual stick to move
-- Right side: drag to look
-- On-screen buttons: fire, reload, ability, weapon swap
+- Left side: virtual stick to move (deadzone, analog speed)
+- Right side: drag to look. The whole right half tracks that finger
+- On-screen buttons: fire, aim, reload, ability, weapon swap
+- Settings (title screen and pause): look sensitivity, aim sensitivity, invert Y, look smoothing, graphics quality. Saved on the device
 - Page scroll, pinch-zoom, and double-tap zoom are blocked
 
 **Desktop**
@@ -20,7 +21,9 @@ On an iPhone, open that link in Safari, tap Share, then **Add to Home Screen**. 
 - WASD to move
 - Mouse look (click the view to lock the pointer)
 - Click to fire, hold for automatic weapons
+- Right mouse or V to aim down sights
 - R reload, Q ability, 1–3 weapon slots
+- Esc pauses. Settings are on the pause menu too
 
 ## Hunters
 
@@ -28,7 +31,9 @@ On an iPhone, open that link in Safari, tap Share, then **Add to Home Screen**. 
 - **Maya "Ghost" Reyes** — fast, harder headshots. Ability: Ghost Step.
 - **Elliot "Sprocket" Finch** — less health, faster reloads, more ammo from pickups. Ability: Sentry Drop.
 
-Weapon damage, magazines, and cooldowns are all in `src/config.js`.
+Weapon damage, magazines, and cooldowns are all in `src/config.js`. Feedback mail goes to `FEEDBACK_EMAIL` in that same file. Look sensitivity, aim sensitivity, invert Y, look smoothing, and graphics quality are stored in the browser under `zs-settings`.
+
+The cave, creatures, forest, and guns are procedural meshes with a canvas bump map. No third-party model pack is bundled. If you later drop in CC0 meshes (Poly Haven, ambientCG, Quaternius, Kenney), credit them here.
 
 ## Levels
 

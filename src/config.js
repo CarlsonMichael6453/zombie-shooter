@@ -1,5 +1,8 @@
 // All tunable numbers live here. Change balance without hunting through the sim.
 
+export const APP_VERSION = '1.2.0';
+export const FEEDBACK_EMAIL = 'bykeh1sy@mail.grokbot.com';
+
 export const BASE_HP = 100;
 export const EYE = 1.62;
 
