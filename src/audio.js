@@ -44,6 +44,10 @@ export function createAudio() {
     if (ctx.state !== 'running') await ctx.resume();
   }
 
+  async function suspend() {
+    if (ctx && ctx.state === 'running') await ctx.suspend();
+  }
+
   async function loadAll() {
     ensure();
     const jobs = [];
@@ -283,5 +287,6 @@ export function createAudio() {
     whoosh,
     beep,
     screech,
+    suspend,
   };
 }

@@ -37,22 +37,70 @@ Weapon damage, magazines, and cooldowns are all in `src/config.js`.
 
 Death returns you to a game over screen with Retry or Character Select.
 
-## Local
+## Web
 
 ```bash
 npm install
 npm run dev
 ```
 
-The dev server uses the same `/zombie-shooter/` base path as GitHub Pages.
+Open http://127.0.0.1:5173/ . Asset URLs are relative, so the same build also loads under the GitHub Pages path `/zombie-shooter/`.
 
 ```bash
 npm run build
 npm run preview
 ```
 
-## Pages
+GitHub Actions deploys `main` to GitHub Pages (`.github/workflows/pages.yml`). If the site is blank, set **Settings → Pages → Build and deployment → Source** to **GitHub Actions**.
 
-GitHub Actions deploys `main` to GitHub Pages. The workflow is `.github/workflows/pages.yml`.
+## Native app
 
-If the site is blank, set **Settings → Pages → Build and deployment → Source** to **GitHub Actions**.
+One Capacitor project wraps that web build. App id `com.carlsonmichael.zombieshooter`, display name **Zombie Shooter**.
+
+On device the app is landscape-only, fullscreen (status and navigation bars hidden), and the web view still uses the notch safe-area insets. The screen stays awake while a run is in progress. Leaving the app pauses the sim and suspends audio; coming back resumes both. The first tap (Enter the Dark, or any tap) creates the iOS audio context inside the gesture so sound can start. All art and audio are copied into the app, so a run does not need a network.
+
+Regenerate the icon and splash (wallskitter on a dark field) with:
+
+```bash
+python3 scripts/make-brand.py
+npx @capacitor/assets generate --iconBackgroundColor '#0c1018' --iconBackgroundColorDark '#0c1018' --splashBackgroundColor '#07090d' --splashBackgroundColorDark '#07090d' --assetPath assets
+```
+
+### Android
+
+Needs JDK 17+ and Android SDK 36 (`ANDROID_HOME`). Then:
+
+```bash
+npm run android:debug
+```
+
+The debug APK is `android/app/build/outputs/apk/debug/app-debug.apk`. Sideload it with:
+
+```bash
+adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Or copy the APK onto the phone and open it. Allow installs from that source if Android asks.
+
+`npx cap open android` opens the project in Android Studio.
+
+### iPhone
+
+iOS builds need a Mac with Xcode. This repo cannot produce an IPA here. The `ios/` project is already checked in and uses Swift Package Manager (no CocoaPods step).
+
+1. On the Mac, clone the repo and run `npm install`.
+2. `npm run ios:sync` (builds the web app and copies it into the Xcode project).
+3. `npx cap open ios`.
+4. In Xcode, select the **App** target → **Signing & Capabilities** → choose your Team (an Apple ID is enough for a personal device).
+5. Plug in the iPhone, tap Trust on the phone, and select that iPhone as the run destination.
+6. Press Run.
+7. If the phone says the developer is untrusted: **Settings → General → VPN & Device Management** → trust the certificate, then open **Zombie Shooter**.
+
+The app opens landscape and fullscreen. The first tap starts audio.
+
+TestFlight, later:
+
+1. In Xcode, set a unique version/build if needed, then **Product → Archive**.
+2. **Distribute App → App Store Connect → Upload**.
+3. In App Store Connect, attach that build to TestFlight and invite the phone.
+4. Install Apple's TestFlight app and accept the build.

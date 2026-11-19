@@ -56,6 +56,7 @@ export class Game {
     this.ui = ui;
     this.hooks = hooks;
     this.running = false;
+    this.paused = false;
     this.token = 0;
     this.time = 0;
     this.feet = new Vector3();
@@ -146,15 +147,17 @@ export class Game {
     this.frame = 0;
     const loop = (now) => {
       this.raf = requestAnimationFrame(loop);
+      if (!this.running || this.paused) {
+        this.last = now;
+        return;
+      }
       let dt = (now - this.last) / 1000;
       this.last = now;
       if (dt > 0.05) dt = 0.05;
       if (dt < 0) dt = 0;
-      if (this.running) {
-        this.update(dt);
-        this.renderer.render(this.scene, this.camera);
-        this.frame += 1;
-      }
+      this.update(dt);
+      this.renderer.render(this.scene, this.camera);
+      this.frame += 1;
     };
     requestAnimationFrame(loop);
   }
@@ -175,6 +178,7 @@ export class Game {
     this.token += 1;
     this.clearWorld();
     this.running = true;
+    this.paused = false;
     this.dead = false;
     this.won = false;
     this.inputLock = false;
@@ -244,9 +248,23 @@ export class Game {
     this.refreshHud();
   }
 
+  pauseForBackground() {
+    this.paused = true;
+    this.input.setEnabled(false);
+    if (document.pointerLockElement) document.exitPointerLock();
+  }
+
+  resumeFromBackground() {
+    this.last = performance.now();
+    this.paused = false;
+    const playing = document.documentElement.classList.contains('playing');
+    if (this.running && playing && !this.dead && !this.won) this.input.setEnabled(true);
+  }
+
   stop() {
     this.token += 1;
     this.running = false;
+    this.paused = false;
     this.clearWorld();
     this.ui.boss(false, 0);
     this.ui.intro(false);
