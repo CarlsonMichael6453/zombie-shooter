@@ -351,6 +351,62 @@ function wireMenus() {
   });
 }
 
+function playCutscene() {
+  const root = $('cutscene');
+  const video = $('cutscene-video');
+  const skip = $('cutscene-skip');
+  if (!root || !video) return Promise.resolve();
+  return new Promise((resolve) => {
+    let done = false;
+    let screeched = false;
+    let canSkip = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      if (!screeched) {
+        screeched = true;
+        audio.screech();
+      }
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+      root.classList.add('hidden');
+      skip.classList.add('hidden');
+      resolve();
+    };
+    root.classList.remove('hidden');
+    skip.classList.add('hidden');
+    video.muted = true;
+    video.defaultMuted = true;
+    video.playsInline = true;
+    video.setAttribute('playsinline', '');
+    video.src = `${BASE}assets/video/gravewing-intro.mp4`;
+    const arm = setTimeout(() => {
+      canSkip = true;
+      skip.classList.remove('hidden');
+    }, 1000);
+    skip.onclick = (e) => {
+      e.stopPropagation();
+      if (canSkip) finish();
+    };
+    root.onpointerdown = () => {
+      if (canSkip) finish();
+    };
+    video.ontimeupdate = () => {
+      if (!screeched && video.currentTime >= 7.6) {
+        screeched = true;
+        audio.screech();
+      }
+    };
+    video.onended = finish;
+    video.onerror = finish;
+    video.play().catch(() => {
+      clearTimeout(arm);
+      finish();
+    });
+  });
+}
+
 function main() {
   setTouchClass();
   window.addEventListener('resize', setTouchClass);
@@ -382,6 +438,7 @@ function main() {
           askRating(false);
         },
         onCalm() { askRating(true); },
+        onCutscene: playCutscene,
       },
     });
   } catch (err) {

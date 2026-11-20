@@ -374,7 +374,30 @@ button:disabled { opacity: 0.7; }
   opacity: 0;
   pointer-events: none;
   z-index: 6;
-  transition: opacity 0.4s linear;
+  transition: opacity 0.45s linear;
+}
+
+#cutscene {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#cutscene.hidden { display: none; }
+#cutscene video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+#cutscene-skip {
+  position: absolute;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 1;
 }
 
 #touch-layer { display: none; position: fixed; inset: 0; z-index: 5; }

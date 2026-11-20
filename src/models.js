@@ -205,155 +205,144 @@ export function stepBug(root, time, moving) {
   }
 }
 
-export function createBird() {
+export function createBird(quality = 'high') {
+  const dense = quality !== 'low';
   const root = new Group();
-  const mat = litMat(0x1c1a24);
-  const wingMat = litMat(0x2c3344, DoubleSide, { gloss: 0.35, normalAmt: 0.15 });
-  root.userData.mats = [mat, wingMat];
-
-  const torso = new Group();
-  torso.position.y = 2.55;
-  root.add(torso);
-
-  const body = new Mesh(geo('birdBody', () => {
-    const g = new SphereGeometry(0.95, 12, 10);
-    g.scale(0.85, 0.78, 1.35);
-    return g;
-  }), mat);
-  body.userData.zone = 'body';
-  torso.add(body);
-
-  const neck = new Mesh(geo('birdNeck', () => new CylinderGeometry(0.22, 0.34, 0.7, 7)), mat);
-  neck.position.set(0, 0.55, -0.7);
-  neck.rotation.x = 0.5;
-  neck.userData.zone = 'body';
-  torso.add(neck);
-
-  const head = new Group();
-  head.position.set(0, 1.35, -1.35);
-  torso.add(head);
-  const skull = new Mesh(geo('birdHead', () => new SphereGeometry(0.48, 10, 8)), mat);
-  skull.scale.set(0.85, 0.9, 1.15);
-  skull.userData.zone = 'head';
-  head.add(skull);
-
-  const beak = new Mesh(geo('birdBeak', () => new ConeGeometry(0.2, 0.92, 7)), mat);
-  beak.position.set(0, 0.05, -0.7);
-  beak.rotation.x = -1.85;
-  beak.userData.zone = 'head';
-  head.add(beak);
-  const hook = new Mesh(geo('birdHook', () => new ConeGeometry(0.09, 0.32, 6)), mat);
-  hook.position.set(0, -0.28, -1.02);
-  hook.rotation.x = -2.55;
-  head.add(hook);
-  const beakLow = new Mesh(geo('birdBeakLow', () => new ConeGeometry(0.12, 0.48, 6)), mat);
-  beakLow.position.set(0, -0.28, -0.48);
-  beakLow.rotation.x = -2.35;
-  head.add(beakLow);
-
-  const eye = new Mesh(geo('birdEye', () => new SphereGeometry(0.1, 8, 6)), basic('birdEye', 0xf7fbff));
-  eye.position.set(0.2, 0.1, -0.34);
-  eye.scale.set(0.85, 1.15, 0.6);
-  head.add(eye);
-  const eyeGlow = new Mesh(
-    geo('birdEyeGlow', () => new SphereGeometry(0.16, 8, 6)),
-    basic('birdEyeGlow', 0xddeeff, { transparent: true, opacity: 0.55, depthWrite: false, blending: AdditiveBlending }),
-  );
-  eyeGlow.position.copy(eye.position);
-  head.add(eyeGlow);
-  const eye2 = new Mesh(geo('birdEye', () => new SphereGeometry(0.1, 8, 6)), basic('birdEyeDim', 0x6e7c88));
-  eye2.position.set(-0.2, 0.06, -0.28);
-  eye2.scale.setScalar(0.65);
-  head.add(eye2);
-
-  const wingShape = new Shape();
-  wingShape.moveTo(0, -0.15);
-  wingShape.lineTo(1.4, 0.55);
-  wingShape.lineTo(3.4, 1.35);
-  wingShape.lineTo(5.5, 1.55);
-  wingShape.lineTo(6.3, 0.35);
-  wingShape.lineTo(5.1, -0.35);
-  wingShape.lineTo(3.0, -0.55);
-  wingShape.lineTo(1.1, -0.35);
-  wingShape.closePath();
-  const wingGeo = geo('wing', () => {
-    const g = new ExtrudeGeometry(wingShape, { depth: 0.28, bevelEnabled: false, steps: 1 });
-    g.rotateY(0.45);
-    return g;
-  });
-  const wingLGeo = geo('wingL', () => {
-    const g = wingGeo.clone();
-    g.scale(-1, 1, 1);
-    g.computeVertexNormals();
-    ensureColor(g);
-    return g;
-  });
-  const wingR = new Group();
-  const wingL = new Group();
-  wingR.position.set(0.35, 0.25, -0.05);
-  wingL.position.set(-0.35, 0.25, -0.05);
-  wingR.add(new Mesh(wingGeo, wingMat));
-  wingL.add(new Mesh(wingLGeo, wingMat));
+  const mat = litMat(0x14161c, undefined, { gloss: 0.62, normalAmt: 0.15 });
+  const wingMat = litMat(0x101216, DoubleSide, { gloss: 0.35, normalAmt: 0.1 });
+  const beakMat = new MeshBasicMaterial({ color: 0xb7c0c8 });
+  beakMat.userData.shared = true;
   const featherMat = new MeshBasicMaterial({
-    map: featherMap(), color: 0xd7e0ea, transparent: true, alphaTest: 0.2, side: DoubleSide,
+    map: featherMap(), color: 0x6a7380, transparent: true, alphaTest: 0.18, side: DoubleSide,
   });
   featherMat.userData.shared = true;
   const sheenMat = featherMat.clone();
-  sheenMat.color.set(0x6d5a96);
+  sheenMat.color.set(0x7a68a4);
   sheenMat.userData.shared = true;
-  const cardGeo = geo('featherCard', () => new PlaneGeometry(1.25, 0.34));
-  function layFeathers(wing, sign) {
-    const rows = [
-      { y: 0.72, z: 0.08, reach: 4.6, count: 7, mat: featherMat, droop: 0.18 },
-      { y: 0.28, z: 0.0, reach: 6.2, count: 8, mat: sheenMat, droop: 0.28 },
-      { y: -0.18, z: -0.06, reach: 5.4, count: 8, mat: featherMat, droop: 0.42 },
-    ];
-    for (const row of rows) {
-      for (let i = 0; i < row.count; i++) {
-        const along = i / (row.count - 1);
-        const card = new Mesh(cardGeo, row.mat);
-        card.position.set(sign * (0.7 + along * row.reach), row.y - along * row.droop, row.z + (i % 2) * 0.02);
-        card.scale.set(0.75 + along * 0.55, 0.7 + (i % 3) * 0.15, 1);
-        card.rotation.z = sign * (-0.04 - along * 0.22);
+  root.userData.mats = [mat, wingMat];
+
+  const torso = new Group();
+  root.add(torso);
+
+  const body = new Mesh(geo('birdBody', () => {
+    const g = new SphereGeometry(0.7, 16, 12);
+    g.scale(0.95, 0.82, 1.2);
+    return g;
+  }), mat);
+  body.position.set(0, 1.55, 0.08);
+  body.userData.zone = 'body';
+  torso.add(body);
+
+  const scaleGeo = geo('featherScale', () => new PlaneGeometry(0.55, 0.28));
+  const rows = dense ? 8 : 4;
+  const cols = dense ? 6 : 3;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const card = new Mesh(scaleGeo, (r + c) % 4 === 0 ? sheenMat : featherMat);
+      card.position.set((c - (cols - 1) / 2) * 0.2, 2.05 - r * 0.16, -0.52);
+      card.rotation.y = Math.PI;
+      card.rotation.x = -0.55 + r * 0.04;
+      torso.add(card);
+    }
+  }
+
+  const neck = new Mesh(geo('birdNeck', () => new CylinderGeometry(0.14, 0.24, 0.5, 8)), mat);
+  neck.position.set(0, 2.15, -0.48);
+  neck.rotation.x = 0.4;
+  torso.add(neck);
+
+  const head = new Group();
+  head.position.set(0, 2.55, -0.95);
+  torso.add(head);
+  const skull = new Mesh(geo('birdHead', () => new SphereGeometry(0.3, 14, 12)), mat);
+  skull.scale.set(0.82, 0.78, 1.12);
+  skull.userData.zone = 'head';
+  head.add(skull);
+
+  const beak = new Mesh(geo('birdBeak', () => new ConeGeometry(0.1, 0.58, 7)), beakMat);
+  beak.position.set(0, -0.02, -0.46);
+  beak.rotation.x = -1.65;
+  beak.userData.zone = 'head';
+  head.add(beak);
+  const hook = new Mesh(geo('birdHook', () => new ConeGeometry(0.045, 0.18, 5)), beakMat);
+  hook.position.set(0, -0.16, -0.68);
+  hook.rotation.x = -2.45;
+  head.add(hook);
+  const beakLow = new Mesh(geo('birdBeakLow', () => new ConeGeometry(0.065, 0.28, 6)), beakMat);
+  beakLow.position.set(0, -0.15, -0.3);
+  beakLow.rotation.x = -2.15;
+  head.add(beakLow);
+
+  const eye = new Mesh(geo('birdEye', () => new SphereGeometry(0.065, 10, 8)), basic('birdEye', 0xe7e2ff));
+  eye.position.set(0.13, 0.05, -0.2);
+  eye.scale.set(0.65, 1.2, 0.5);
+  head.add(eye);
+  const eyeGlow = new Mesh(
+    geo('birdEyeGlow', () => new SphereGeometry(0.1, 8, 6)),
+    basic('birdEyeGlow', 0xcbb8ff, { transparent: true, opacity: 0.75, depthWrite: false, blending: AdditiveBlending }),
+  );
+  eyeGlow.position.copy(eye.position);
+  head.add(eyeGlow);
+  const eye2 = eye.clone();
+  eye2.position.x *= -1;
+  head.add(eye2);
+  const glow2 = eyeGlow.clone();
+  glow2.position.copy(eye2.position);
+  head.add(glow2);
+
+  const wingR = new Group();
+  const wingL = new Group();
+  wingR.position.set(0.42, 1.9, -0.15);
+  wingL.position.set(-0.42, 1.9, -0.15);
+  const cardGeo = geo('featherCard', () => new PlaneGeometry(1.15, 0.62));
+  function lay(wing, sign) {
+    const layers = dense
+      ? [
+        { y: 0.95, reach: 2.8, n: 7, mat: featherMat },
+        { y: 0.22, reach: 3.8, n: 8, mat: sheenMat },
+        { y: -0.5, reach: 3.2, n: 7, mat: featherMat },
+      ]
+      : [
+        { y: 0.4, reach: 2.8, n: 5, mat: featherMat },
+        { y: -0.05, reach: 3.3, n: 6, mat: sheenMat },
+      ];
+    for (const layer of layers) {
+      for (let i = 0; i < layer.n; i++) {
+        const along = i / Math.max(1, layer.n - 1);
+        const card = new Mesh(cardGeo, layer.mat);
+        card.position.set(sign * (0.4 + along * layer.reach), layer.y - along * 0.38, (i % 2) * 0.025);
         card.rotation.y = Math.PI;
+        card.rotation.z = sign * (-0.04 - along * 0.22);
+        card.scale.set(0.72 + along * 0.55, 0.8 + (i % 3) * 0.12, 1);
         wing.add(card);
       }
     }
   }
-  layFeathers(wingR, 1);
-  layFeathers(wingL, -1);
+  lay(wingR, 1);
+  lay(wingL, -1);
   torso.add(wingR);
   torso.add(wingL);
 
-  const tail = new Mesh(geo('tail', () => {
-    const s = new Shape();
-    s.moveTo(0, 0);
-    s.lineTo(0.7, 0.15);
-    s.lineTo(1.5, -0.2);
-    s.lineTo(0.2, -0.45);
-    s.closePath();
-    const g = new ExtrudeGeometry(s, { depth: 0.12, bevelEnabled: false });
-    return g;
-  }), wingMat);
-  tail.position.set(0, -0.1, 1.05);
-  tail.rotation.y = Math.PI;
-  torso.add(tail);
-
   function leg(side) {
     const g = new Group();
-    const thigh = new Mesh(geo('thigh', () => new CylinderGeometry(0.12, 0.16, 1.15, 5)), mat);
-    thigh.position.y = -0.7;
+    const thigh = new Mesh(geo('thigh', () => new CylinderGeometry(0.09, 0.12, 0.8, 6)), mat);
+    thigh.position.y = -0.42;
     g.add(thigh);
-    const shin = new Mesh(geo('shin', () => new CylinderGeometry(0.08, 0.11, 1.15, 5)), mat);
-    shin.position.y = -1.7;
+    const shin = new Mesh(geo('shin', () => new CylinderGeometry(0.06, 0.085, 0.85, 6)), mat);
+    shin.position.y = -1.1;
     g.add(shin);
-    for (let i = -1; i <= 1; i++) {
-      const talon = new Mesh(geo('talon', () => new ConeGeometry(0.05, 0.38, 4)), mat);
-      talon.position.set(i * 0.12, -2.35, 0.12);
-      talon.rotation.x = -Math.PI / 2 + i * 0.15;
+    [-0.5, -0.12, 0.28, 0.85].forEach((a, i) => {
+      const talon = new Mesh(geo('talon', () => new ConeGeometry(0.055, 0.62, 5)), mat);
+      const back = i === 3;
+      talon.position.set(Math.sin(a) * 0.14, -1.55, back ? 0.16 : -0.14);
+      talon.rotation.x = back ? 1.15 : -1.4;
+      talon.rotation.z = a * 0.25;
+      const claw = new Mesh(geo('claw', () => new ConeGeometry(0.018, 0.16, 4)), basic('claw', 0x0c0e12));
+      claw.position.y = -0.28;
+      talon.add(claw);
       g.add(talon);
-    }
-    g.position.set(side * 0.38, 0.15, 0.1);
+    });
+    g.position.set(side * 0.34, 1.55, 0.12);
     return g;
   }
   const legL = leg(-1);
@@ -368,29 +357,30 @@ export function createBird() {
     }
   });
 
-  root.userData.parts = { torso, head, wingL, wingR, legL, legR, eye };
-  root.scale.setScalar(2.35);
+  root.userData.parts = { torso, head, wingL, wingR, legL, legR, eye, eyeGlow };
+  root.scale.setScalar(1.7);
   return root;
 }
 
 export function poseBird(root, stand, spread, flap) {
   const p = root.userData.parts;
-  p.torso.position.y = 1.15 + stand * 1.2;
-  p.torso.rotation.x = (1 - stand) * 0.65;
-  p.head.rotation.x = (1 - stand) * 0.7 - stand * 0.15 + Math.sin(flap * 0.5) * 0.04;
-  const fold = 1.2 * (1 - spread);
-  const flapZ = Math.sin(flap) * 0.5 * spread;
-  const flapX = Math.cos(flap) * 0.22 * spread;
-  p.wingR.rotation.z = fold * 0.15 + (1 - spread) * 1.05 + flapZ;
-  p.wingL.rotation.z = -fold * 0.15 - (1 - spread) * 1.05 - flapZ;
+  p.torso.position.y = (1 - stand) * -0.42;
+  p.torso.rotation.x = (1 - stand) * 0.72;
+  p.head.rotation.x = (1 - stand) * 0.85 - stand * 0.2 + Math.sin(flap * 0.4) * 0.03;
+  const fold = 1.15 * (1 - spread);
+  const flapZ = Math.sin(flap) * 0.22 * spread;
+  const flapX = Math.cos(flap) * 0.12 * spread;
+  p.wingR.rotation.z = fold + flapZ;
+  p.wingL.rotation.z = -fold - flapZ;
   p.wingR.rotation.x = flapX;
   p.wingL.rotation.x = flapX;
-  p.wingR.rotation.y = 0.15 + spread * 0.15;
-  p.wingL.rotation.y = -0.15 - spread * 0.15;
-  p.legL.rotation.x = (1 - stand) * 1.1;
-  p.legR.rotation.x = (1 - stand) * 1.1;
-  const glow = 0.25 + stand * 0.75;
-  p.eye.material.color.setRGB(glow, glow, glow);
+  p.wingR.rotation.y = 0;
+  p.wingL.rotation.y = 0;
+  p.legL.rotation.x = (1 - stand) * 0.9;
+  p.legR.rotation.x = (1 - stand) * 0.9;
+  const glow = 0.2 + stand * 0.8;
+  p.eye.material.color.setRGB(0.72 * glow, 0.68 * glow, glow);
+  if (p.eyeGlow) p.eyeGlow.material.opacity = 0.2 + glow * 0.65;
 }
 
 export function createWeaponModel(view, glove = 0x5a4638) {

@@ -304,12 +304,12 @@ export function solid(geo, color, side) {
 
 export function setAtmosphere(level) {
   if (level === 'forest') {
-    flash.uSky.value.set(0x243444);
-    flash.uGround.value.set(0x101318);
-    flash.uAmbient.value.set(0x243444);
-    flash.uFog.value.set(0x111319);
-    flash.uFogDensity.value = 0.016;
-    flash.uMoonAmt.value = 1.25;
+    flash.uSky.value.set(0x2a3846);
+    flash.uGround.value.set(0x12161c);
+    flash.uAmbient.value.set(0x2a3846);
+    flash.uFog.value.set(0x1a242e);
+    flash.uFogDensity.value = 0.028;
+    flash.uMoonAmt.value = 0.55;
     flash.uRimAmt.value = 0.85;
     flash.uRange.value = 20;
     flash.uIntensity.value = 1.7;
