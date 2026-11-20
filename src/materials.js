@@ -326,21 +326,21 @@ export function solid(geo, color, side) {
 
 export function setAtmosphere(level) {
   if (level === 'forest') {
-    flash.uSky.value.set(0x2a3846);
-    flash.uGround.value.set(0x12161c);
-    flash.uAmbient.value.set(0x2a3846);
-    flash.uFog.value.set(0x243240);
-    flash.uFogDensity.value = 0.028;
-    flash.uMoonAmt.value = 0.42;
-    flash.uRimAmt.value = 1.35;
-    flash.uMoonDir.value.set(0.2, 0.72, 0.66).normalize();
-    flash.uRange.value = 14;
-    flash.uIntensity.value = 0.32;
-    flash.uInner.value = Math.cos(0.48);
-    flash.uOuter.value = Math.cos(1.05);
-    flash.uLight.value.set(0xd5e2f2);
-    flash.uMoon.value.set(0x9eb0c4);
-    flash.uRim.value.set(0xd5dee8);
+    flash.uSky.value.set(0x161e28);
+    flash.uGround.value.set(0x080a0e);
+    flash.uAmbient.value.set(0x161e28);
+    flash.uFog.value.set(0x1a242e);
+    flash.uFogDensity.value = 0.034;
+    flash.uMoonAmt.value = 0.16;
+    flash.uRimAmt.value = 0.42;
+    flash.uMoonDir.value.set(0.12, 0.86, 0.35).normalize();
+    flash.uRange.value = 11;
+    flash.uIntensity.value = 0.2;
+    flash.uInner.value = Math.cos(0.42);
+    flash.uOuter.value = Math.cos(0.95);
+    flash.uLight.value.set(0xc4b39a);
+    flash.uMoon.value.set(0x5c6a78);
+    flash.uRim.value.set(0x7d6e90);
   } else {
     flash.uSky.value.set(0x1c3442);
     flash.uGround.value.set(0x0c1418);

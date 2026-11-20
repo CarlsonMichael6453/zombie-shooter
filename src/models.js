@@ -1,7 +1,7 @@
 import {
   Group, Mesh, InstancedMesh, Object3D, BoxGeometry, SphereGeometry, CylinderGeometry, ConeGeometry,
   TorusGeometry, BufferGeometry, BufferAttribute, Float32BufferAttribute,
-  MeshBasicMaterial, CanvasTexture, SRGBColorSpace, DoubleSide, Points, PointsMaterial,
+  MeshBasicMaterial, MeshStandardMaterial, CanvasTexture, SRGBColorSpace, DoubleSide, Points, PointsMaterial,
   Shape, ExtrudeGeometry, CircleGeometry, RingGeometry, IcosahedronGeometry,
   BackSide, AdditiveBlending, PlaneGeometry, LatheGeometry, Vector2,
 } from 'three';
@@ -384,9 +384,10 @@ export function createBird(quality = 'high') {
 export function poseBird(root, stand, spread, flap) {
   if (!root || root.userData?.glb) {
     const mat = root?.userData?.mats?.[0];
-    if (mat?.uniforms?.uFlap) {
+    const u = mat?.userData?.uFlap || mat?.uniforms?.uFlap;
+    if (u) {
       const amp = (0.12 + spread * 0.4) * Math.sin(flap);
-      mat.uniforms.uFlap.value = stand > 0.4 ? amp : amp * 0.35;
+      u.value = stand > 0.4 ? amp : amp * 0.35;
     }
     return;
   }
@@ -413,11 +414,11 @@ export function poseBird(root, stand, spread, flap) {
 
 export function createWeaponModel(view, glove = 0x5a4638) {
   const g = new Group();
-  const metal = new MeshBasicMaterial({ color: 0xb7bdc6 });
-  const dark = new MeshBasicMaterial({ color: 0x1c2026 });
-  const wood = new MeshBasicMaterial({ color: 0x6b4a32 });
-  const gloveMat = new MeshBasicMaterial({ color: glove });
-  const accent = new MeshBasicMaterial({ color: 0xc4553a });
+  const metal = new MeshStandardMaterial({ color: 0x3e4752, roughness: 0.64, metalness: 0.16 });
+  const dark = new MeshStandardMaterial({ color: 0x1c2128, roughness: 0.58, metalness: 0.22 });
+  const wood = new MeshStandardMaterial({ color: 0x2a1e16, roughness: 0.86, metalness: 0.02 });
+  const gloveMat = new MeshStandardMaterial({ color: glove, roughness: 0.84, metalness: 0 });
+  const accent = new MeshStandardMaterial({ color: 0xc4553a, roughness: 0.5, metalness: 0.08 });
   const add = (mesh, x, y, z, rx = null, ry = 0, rz = 0) => {
     mesh.position.set(x, y, z);
     if (rx !== null) mesh.rotation.set(rx, ry, rz);
@@ -570,7 +571,7 @@ export function createCrag() {
   }
   geometry.computeVertexNormals();
   ensureColor(geometry);
-  return new Mesh(geometry, pbrMat('rock', 0x4a5562, {
+  return new Mesh(geometry, pbrMat('rock', 0x242a32, {
     side: DoubleSide, gloss: 0.22, uvRepeat: 1.4, normalAmt: 0.65,
   }));
 }
