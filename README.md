@@ -38,7 +38,7 @@ The cave, creatures, forest, and guns are procedural meshes. Surface detail uses
 ## Levels
 
 1. **The Cave** — a wet, winding tunnel. Wallskitters crawl the ceiling and drop in waves. Ammo, medkits, and weapon pickups are along the path. Walk out the far end.
-2. **The Clearing** — a misty rock bowl. Leaving the cave plays a short Gravewing intro (tap to skip after a second). The bird is already on its feet, wings spread. Kill it.
+2. **The Clearing** — a dark rock bowl. Leaving the cave plays a short Gravewing intro (tap to skip after a second). The bird is a TRELLIS model (`public/assets/models/gravewing_mobile.glb`, with the larger `gravewing.glb` on high desktop quality), already on its feet, wings spread. Kill it.
 
 Death returns you to a game over screen with Retry or Character Select.
 
