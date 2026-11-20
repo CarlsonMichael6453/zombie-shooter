@@ -382,7 +382,16 @@ export function createBird(quality = 'high') {
 }
 
 export function poseBird(root, stand, spread, flap) {
+  if (!root || root.userData?.glb) {
+    const mat = root?.userData?.mats?.[0];
+    if (mat?.uniforms?.uFlap) {
+      const amp = (0.12 + spread * 0.4) * Math.sin(flap);
+      mat.uniforms.uFlap.value = stand > 0.4 ? amp : amp * 0.35;
+    }
+    return;
+  }
   const p = root.userData.parts;
+  if (!p) return;
   p.torso.position.y = (1 - stand) * -0.42;
   p.torso.rotation.x = (1 - stand) * 0.72;
   p.head.rotation.x = (1 - stand) * 0.85 - stand * 0.2 + Math.sin(flap * 0.4) * 0.03;
@@ -561,7 +570,7 @@ export function createCrag() {
   }
   geometry.computeVertexNormals();
   ensureColor(geometry);
-  return new Mesh(geometry, pbrMat('rock', 0x9aa6b4, {
+  return new Mesh(geometry, pbrMat('rock', 0x4a5562, {
     side: DoubleSide, gloss: 0.22, uvRepeat: 1.4, normalAmt: 0.65,
   }));
 }

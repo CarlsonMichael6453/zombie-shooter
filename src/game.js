@@ -13,6 +13,7 @@ import {
 } from './models.js';
 import { createComposer, gradeTime } from './post.js';
 import { loadSettings, resolvedQuality } from './settings.js';
+import { loadGravewing } from './gravewing.js';
 
 const UP = new Vector3(0, 1, 0);
 
@@ -538,10 +539,10 @@ export class Game {
     groundGeo.computeVertexNormals();
     paint(groundGeo, (c, x, y, z, i) => {
       const n = hash(i + x * 0.4 + y);
-      c.setRGB(0.28 + n * 0.08, 0.24 + n * 0.06, 0.18 + n * 0.05);
+      c.setRGB(0.16 + n * 0.06, 0.15 + n * 0.05, 0.13 + n * 0.04);
     });
     groundGeo.rotateX(-Math.PI / 2);
-    const ground = new Mesh(groundGeo, pbrMat('ground', 0x6a5c4e, {
+    const ground = new Mesh(groundGeo, pbrMat('ground', 0x241c18, {
       gloss: 0.08, uvRepeat: 5, normalAmt: 0.85, roughBias: 0.2,
     }));
     root.add(ground);
@@ -582,7 +583,7 @@ export class Game {
       const sheet = new Mesh(
         new PlaneGeometry(18, 6),
         new MeshBasicMaterial({
-          color: 0x7d8c9c, transparent: true, opacity: 0.07, depthWrite: false, side: DoubleSide,
+          color: 0x4d5c6a, transparent: true, opacity: 0.1, depthWrite: false, side: DoubleSide, fog: false,
         }),
       );
       sheet.position.set((i - 4) * 1.5, 1.2 + (i % 3) * 0.8, -2 - i * 0.6);
@@ -595,9 +596,9 @@ export class Game {
     moon.position.set(-26, 32, -18);
     root.add(moon);
 
-    const bird = createBird(this.quality);
-    bird.position.set(0, 0, 0);
-    poseBird(bird, 0.05, 0, 0);
+    const bird = new Group();
+    bird.userData.mats = [];
+    bird.userData.standY = 0;
     root.add(bird);
     const shadow = new Mesh(
       new CircleGeometry(2.4, 16),
@@ -630,12 +631,6 @@ export class Game {
       pos: bird.position,
     };
     const bossHits = [];
-    bird.traverse((o) => {
-      if (o.isMesh && o.userData.ownerKind === 'boss') {
-        o.userData.owner = boss;
-        bossHits.push(o);
-      }
-    });
     this.boss = boss;
     this.bossHits = bossHits;
 
@@ -1498,7 +1493,7 @@ export class Game {
     if (!b || this.level !== 'forest' || !b.alive && b.phase === 'dead') {
       if (b?.phase === 'dead') {
         b.mesh.rotation.z = Math.min(1.2, b.mesh.rotation.z + dt);
-        b.mesh.position.y = Math.max(-0.4, b.mesh.position.y - dt * 0.4);
+        b.mesh.position.y = Math.max((b.standY || 0) - 0.6, b.mesh.position.y - dt * 0.4);
       }
       return;
     }
@@ -1516,12 +1511,14 @@ export class Game {
       if (dist < BOSS.wakeRange) this.wakeBoss();
       return;
     }
+    const stand = b.standY || 0;
     if (b.phase === 'reveal') {
       b.timer += dt;
-      poseBird(b.mesh, 1, 1, this.time * 2.4);
-      b.mesh.position.y = 0;
-      b.mesh.lookAt(this.feet.x, 0, this.feet.z);
-      if (dist < BOSS.wakeRange || b.timer > 7) {
+      poseBird(b.mesh, 1, 1, this.time * 2.2);
+      const bob = Math.sin(this.time * 1.15) * 0.16;
+      b.mesh.position.y += (stand + bob - b.mesh.position.y) * Math.min(1, dt * 4);
+      this.faceBoss(b, this.feet.x, this.feet.y + 1.3, this.feet.z);
+      if (dist < 6.5 || b.timer > 8) {
         b.phase = 'fight';
         b.nextAttack = this.time + 1.4;
         this.ui.boss(true, b.hp / b.maxHp);
@@ -1534,7 +1531,7 @@ export class Game {
       const stand = smooth(b.timer / 1.5);
       const spread = smooth((b.timer - 1.05) / 1.5);
       poseBird(b.mesh, stand, Math.max(0, spread), this.time * 3);
-      b.mesh.lookAt(this.feet.x, b.mesh.position.y, this.feet.z);
+      this.faceBoss(b, this.feet.x, b.mesh.position.y, this.feet.z);
       if (b.timer > 1.25 && !b.screeched) {
         b.screeched = true;
         this.audio.screech();
@@ -1564,15 +1561,16 @@ export class Game {
       const tz = Math.sin(b.hover) * 11;
       b.mesh.position.x += (tx - b.mesh.position.x) * Math.min(1, dt * 1.3);
       b.mesh.position.z += (tz - b.mesh.position.z) * Math.min(1, dt * 1.3);
-      b.mesh.position.y += (3.2 - b.mesh.position.y) * Math.min(1, dt * 1.6);
-      b.mesh.lookAt(this.feet.x, b.mesh.position.y, this.feet.z);
+      const bob = Math.sin(this.time * 1.15) * 0.18;
+      b.mesh.position.y += (stand + 0.9 + bob - b.mesh.position.y) * Math.min(1, dt * 1.6);
+      this.faceBoss(b, this.feet.x, b.mesh.position.y, this.feet.z);
       poseBird(b.mesh, 1, 1, this.time * 5.5);
       if (this.time >= b.nextAttack) this.startBossAttack(b);
       if (dist < 2.5 && b.mesh.position.y < 1.4) this.damagePlayer(BOSS.touchDamage);
     }
     b.shadow.position.x = b.mesh.position.x;
     b.shadow.position.z = b.mesh.position.z;
-    b.shadow.scale.setScalar(1.6 + b.mesh.position.y * 0.18);
+    b.shadow.scale.setScalar(4.2 + Math.max(0, b.mesh.position.y - stand) * 0.35);
     b.aim.copy(b.mesh.position);
     b.aim.y += 2.3;
   }
@@ -1596,31 +1594,33 @@ export class Game {
 
   runBossAttack(b, dt) {
     b.attackT += dt;
+    const stand = b.standY || 0;
     const t = b.attackT;
     if (b.attack === 'swoop') {
-      if (t < 0.5) b.mesh.position.y += (6.2 - b.mesh.position.y) * Math.min(1, dt * 4);
+      if (t < 0.5) b.mesh.position.y += (stand + 2.6 - b.mesh.position.y) * Math.min(1, dt * 4);
       else if (t < 1.15) {
         b.mesh.position.x += (b.aimX - b.mesh.position.x) * Math.min(1, dt * 7);
         b.mesh.position.z += (b.aimZ - b.mesh.position.z) * Math.min(1, dt * 7);
-        b.mesh.position.y += (0.35 - b.mesh.position.y) * Math.min(1, dt * 8);
+        b.mesh.position.y += (stand + 0.25 - b.mesh.position.y) * Math.min(1, dt * 8);
         const d = Math.hypot(this.feet.x - b.mesh.position.x, this.feet.z - b.mesh.position.z);
         if (!b.hitDone && d < 2.7 && b.mesh.position.y < 2.4) {
           b.hitDone = true;
           this.damagePlayer(BOSS.swoopDamage);
         }
       } else {
-        b.mesh.position.y += (3.2 - b.mesh.position.y) * Math.min(1, dt * 2);
+        b.mesh.position.y += (stand + 0.9 - b.mesh.position.y) * Math.min(1, dt * 2);
       }
-      b.mesh.lookAt(this.feet.x, Math.min(this.feet.y + 1.2, b.mesh.position.y), this.feet.z);
+      this.faceBoss(b, this.feet.x, Math.min(this.feet.y + 1.2, b.mesh.position.y), this.feet.z);
       poseBird(b.mesh, 1, 1, this.time * 10);
       if (t > 1.85) this.endBossAttack(b);
     } else if (b.attack === 'gust') {
-      b.mesh.lookAt(this.feet.x, b.mesh.position.y, this.feet.z);
+      this.faceBoss(b, this.feet.x, b.mesh.position.y, this.feet.z);
       poseBird(b.mesh, 1, 1, this.time * 14);
       if (t > 0.42 && !b.hitDone) {
         b.hitDone = true;
         this.camera.getWorldDirection(this.tmp);
         b.mesh.getWorldDirection(this.tmp2);
+        this.tmp2.negate();
         const toX = this.feet.x - b.mesh.position.x;
         const toZ = this.feet.z - b.mesh.position.z;
         const d = Math.hypot(toX, toZ) || 1;
@@ -1638,14 +1638,14 @@ export class Game {
       if (t < 0.7) {
         b.mesh.position.x += (destX - b.mesh.position.x) * Math.min(1, dt * 4);
         b.mesh.position.z += (destZ - b.mesh.position.z) * Math.min(1, dt * 4);
-        b.mesh.position.y += ((t < 0.3 ? 1.6 : 0.2) - b.mesh.position.y) * Math.min(1, dt * 6);
+        b.mesh.position.y += ((stand + (t < 0.3 ? 1.5 : 0.2)) - b.mesh.position.y) * Math.min(1, dt * 6);
         const d = Math.hypot(this.feet.x - b.mesh.position.x, this.feet.z - b.mesh.position.z);
         if (!b.hitDone && d < 2.3) {
           b.hitDone = true;
           this.damagePlayer(BOSS.hopDamage);
         }
       }
-      b.mesh.lookAt(this.feet.x, b.mesh.position.y, this.feet.z);
+      this.faceBoss(b, this.feet.x, b.mesh.position.y, this.feet.z);
       poseBird(b.mesh, 1, 0.85, this.time * 6);
       if (t > 1.15) this.endBossAttack(b);
     }
@@ -1823,11 +1823,62 @@ export class Game {
     points.geometry.attributes.position.needsUpdate = true;
   }
 
+  faceBoss(b, x, y, z) {
+    const m = b.mesh;
+    const dx = x - m.position.x;
+    const dy = y - m.position.y;
+    const dz = z - m.position.z;
+    const flat = Math.hypot(dx, dz) || 1;
+    m.rotation.order = 'YXZ';
+    m.rotation.y = Math.atan2(dx, dz);
+    m.rotation.x = Math.atan2(-dy, flat) * 0.85;
+    m.rotation.z = 0;
+  }
+
+  async ensureGravewing() {
+    if (this.gravewingPromise) return this.gravewingPromise;
+    this.gravewingPromise = (async () => {
+      let model;
+      try {
+        model = await loadGravewing({
+          quality: this.quality,
+          baseUrl: import.meta.env.BASE_URL,
+        });
+      } catch (err) {
+        console.warn('gravewing glb', err);
+        model = createBird(this.quality);
+        model.userData.standY = 0;
+      }
+      const old = this.boss.mesh;
+      model.position.copy(old.position);
+      if (!model.userData.standY) model.position.y = old.position.y;
+      (old.parent || this.forestRoot).add(model);
+      old.parent?.remove(old);
+      this.boss.mesh = model;
+      this.boss.pos = model.position;
+      this.boss.mats = model.userData.mats || [];
+      this.boss.standY = model.userData.standY || 0;
+      this.bossHits = [];
+      model.traverse((o) => {
+        if (o.isMesh && o.userData.ownerKind === 'boss') {
+          o.userData.owner = this.boss;
+          this.bossHits.push(o);
+        }
+      });
+      if (this.level === 'forest') this.hitMeshes = this.bossHits.slice();
+    })().catch((err) => {
+      this.gravewingPromise = null;
+      throw err;
+    });
+    return this.gravewingPromise;
+  }
+
   async goForest() {
     if (this.transitioning || this.level !== 'cave') return;
     this.transitioning = true;
     this.inputLock = true;
     const token = this.token;
+    const pendingBird = this.ensureGravewing();
     this.ui.fade(1);
     await wait(450);
     if (token !== this.token) return;
@@ -1853,13 +1904,17 @@ export class Game {
     this.scene.add(this.forestRoot);
     this.solidMeshes = this.forestSolids;
     this.colliders = this.forestColliders;
-    this.feet.set(0, 0, 18);
-    this.aimAt(0, 2.4, 0);
+    await pendingBird;
+    if (token !== this.token) return;
+    this.hitMeshes = this.bossHits.slice();
+    const stand = this.boss.standY || 0;
+    this.feet.set(0, 0, 8.6);
+    this.aimAt(0, stand * 0.72, 0);
     poseBird(this.boss.mesh, 1, 1, 0);
     this.boss.phase = 'reveal';
     this.boss.timer = 0;
-    this.boss.mesh.position.set(0, 0, 0);
-    this.boss.mesh.lookAt(0, 0, 18);
+    this.boss.mesh.position.set(0, stand, 0);
+    this.faceBoss(this.boss, 0, stand * 0.5, 8.6);
     this.audio.playPlaylist('forest');
     this.ui.objective('Gravewing');
     if (token !== this.token) return;

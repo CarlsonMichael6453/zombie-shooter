@@ -28,6 +28,7 @@ export const flash = {
 const VERT = /* glsl */ `
 attribute vec3 color;
 attribute vec2 aUv;
+uniform float uFlap;
 varying vec3 vW;
 varying vec3 vN;
 varying vec3 vC;
@@ -35,6 +36,19 @@ varying vec2 vUv;
 void main() {
   vec3 pos = position;
   vec3 nrm = normal;
+  float side = sign(pos.x);
+  float wgt = smoothstep(0.10, 0.42, abs(pos.x));
+  float ang = uFlap * wgt;
+  float cs = cos(ang);
+  float sn = sin(ang) * side;
+  float lx = pos.x - side * 0.10;
+  float ly = pos.y;
+  pos.x = lx * cs - ly * sn + side * 0.10;
+  pos.y = lx * sn + ly * cs;
+  float nx = nrm.x;
+  float ny = nrm.y;
+  nrm.x = nx * cs - ny * sn;
+  nrm.y = nx * sn + ny * cs;
   #ifdef USE_INSTANCING
     pos = (instanceMatrix * vec4(position, 1.0)).xyz;
     nrm = mat3(instanceMatrix) * normal;
@@ -77,6 +91,9 @@ uniform float uRoughBias;
 uniform float uScroll;
 uniform float uAlphaAmt;
 uniform float uAlphaCut;
+uniform float uFlap;
+uniform float uFill;
+uniform vec3 uSheen;
 uniform sampler2D uMap;
 uniform sampler2D uNormal;
 uniform sampler2D uRough;
@@ -130,6 +147,8 @@ void main() {
   float fres = pow(1.0 - max(dot(N, V), 0.0), 4.0) * (1.0 - rough);
   vec3 col = albedo * (amb + uLight * beam + uMoon * moon);
   col += uRim * rim * (0.45 + moon);
+  col += albedo * uFill;
+  col += uSheen * pow(1.0 - max(dot(N, normalize(toCam)), 0.0), 1.6);
   col += uLight * (spec * 0.55 + fres * 0.85) * cone * atten;
   col += vec3(0.85) * uFlash;
   float wobble = 1.0 + 0.07 * sin(uTime * 0.37 + vW.x * 0.13 + vW.z * 0.09);
@@ -223,6 +242,9 @@ export function litMat(color = 0xffffff, side = FrontSide, opts = {}) {
     uScroll: { value: opts.scroll ?? 0 },
     uAlphaAmt: { value: opts.alpha ? 1 : 0 },
     uAlphaCut: { value: opts.alphaCut ?? 0.35 },
+    uFlap: { value: 0 },
+    uFill: { value: opts.fill ?? 0 },
+    uSheen: { value: new Color(opts.sheen ?? 0x000000) },
     uMap: { value: pack?.map || blank },
     uNormal: { value: opts.normalMap || pack?.normal || flatNormal },
     uRough: { value: pack?.rough || blank },
@@ -307,13 +329,13 @@ export function setAtmosphere(level) {
     flash.uSky.value.set(0x2a3846);
     flash.uGround.value.set(0x12161c);
     flash.uAmbient.value.set(0x2a3846);
-    flash.uFog.value.set(0x4a5968);
-    flash.uFogDensity.value = 0.02;
-    flash.uMoonAmt.value = 0.35;
-    flash.uRimAmt.value = 1.85;
-    flash.uMoonDir.value.set(0.08, 0.42, -0.9).normalize();
+    flash.uFog.value.set(0x243240);
+    flash.uFogDensity.value = 0.028;
+    flash.uMoonAmt.value = 0.42;
+    flash.uRimAmt.value = 1.35;
+    flash.uMoonDir.value.set(0.2, 0.72, 0.66).normalize();
     flash.uRange.value = 14;
-    flash.uIntensity.value = 0.16;
+    flash.uIntensity.value = 0.32;
     flash.uInner.value = Math.cos(0.48);
     flash.uOuter.value = Math.cos(1.05);
     flash.uLight.value.set(0xd5e2f2);
