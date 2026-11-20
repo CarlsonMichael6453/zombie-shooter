@@ -10,6 +10,7 @@ const GradeShader = {
     uTime: { value: 0 },
     uGrain: { value: 0.035 },
     uVignette: { value: 0.26 },
+    uShadow: { value: 0.22 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -23,13 +24,14 @@ const GradeShader = {
     uniform float uTime;
     uniform float uGrain;
     uniform float uVignette;
+    uniform float uShadow;
     varying vec2 vUv;
     void main() {
       vec3 col = texture2D(tDiffuse, vUv).rgb;
       float l = dot(col, vec3(0.299, 0.587, 0.114));
       vec3 shadow = vec3(0.055, 0.075, 0.09);
       vec3 cool = vec3(0.78, 0.86, 0.94);
-      col = mix(shadow, col, smoothstep(0.0, 0.22, l));
+      col = mix(shadow, col, smoothstep(0.0, uShadow, l));
       col = mix(col, cool, smoothstep(0.62, 1.0, l) * 0.18);
       col = mix(col, vec3(l * 0.72, l * 0.8, l * 0.9), 0.06);
       float n = fract(sin(dot(vUv + fract(uTime * 0.13), vec2(12.9898, 78.233))) * 43758.5453);
@@ -45,13 +47,19 @@ export function createComposer(renderer, scene, camera, quality) {
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
   if (quality === 'high') {
-    const bloom = new UnrealBloomPass(new Vector2(256, 256), 0.32, 0.45, 0.84);
+    const bloom = new UnrealBloomPass(new Vector2(256, 256), 0.22, 0.4, 0.96);
     composer.addPass(bloom);
   }
   const grade = new ShaderPass(GradeShader);
   grade.material.toneMapped = false;
   composer.addPass(grade);
   return composer;
+}
+
+export function gradeShadow(composer, amount) {
+  const pass = composer?.passes?.[composer.passes.length - 1];
+  const u = pass?.uniforms?.uShadow || pass?.material?.uniforms?.uShadow;
+  if (u) u.value = amount;
 }
 
 export function gradeTime(composer, time) {

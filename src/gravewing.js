@@ -1,7 +1,7 @@
 import {
-  Group, Mesh, SphereGeometry, MeshBasicMaterial, PointLight, AdditiveBlending, DoubleSide,
+  Group, Mesh, SphereGeometry, MeshBasicMaterial, PointLight,
+  SRGBColorSpace, DoubleSide, Color,
 } from 'three';
-import { litMat, ensureColor } from './materials.js';
 
 export const GRAVEWING_SCALE = 13.2;
 
@@ -23,52 +23,65 @@ export async function loadGravewing({ quality = 'high', baseUrl = './' }) {
   }
 }
 
+function attachFlap(mat) {
+  const uFlap = { value: 0 };
+  mat.userData.uFlap = uFlap;
+  const previous = mat.onBeforeCompile;
+  mat.onBeforeCompile = (shader, renderer) => {
+    previous?.(shader, renderer);
+    shader.uniforms.uFlap = uFlap;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uFlap;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        float gwSide = sign(transformed.x);
+        float gwW = smoothstep(0.10, 0.42, abs(transformed.x));
+        float gwAng = uFlap * gwW;
+        float gwC = cos(gwAng);
+        float gwS = sin(gwAng) * gwSide;
+        float gwX = transformed.x - gwSide * 0.10;
+        float gwY = transformed.y;
+        transformed.x = gwX * gwC - gwY * gwS + gwSide * 0.10;
+        transformed.y = gwX * gwS + gwY * gwC;
+      `);
+  };
+  const previousKey = mat.customProgramCacheKey?.bind(mat);
+  mat.customProgramCacheKey = () => `${previousKey?.() || ''}|gravewing-flap`;
+}
+
 async function fetchModel(loader, url) {
   const gltf = await loader.loadAsync(url);
   const face = gltf.scene;
-  const bodyMat = litMat(0xffffff, DoubleSide, {
-    maps: null,
-    gloss: 0.2,
-    uvRepeat: 1,
-    normalAmt: 0,
-    roughBias: -0.2,
-    sheen: 0x4a2878,
-    fill: 0.75,
-  });
+  let bodyMat = null;
   face.traverse((o) => {
-    if (!o.isMesh) return;
-    const map = o.material?.map || null;
-    if (map) {
-      bodyMat.uniforms.uMap.value = map;
-      bodyMat.uniforms.uMapAmt.value = 1;
+    if (!o.isMesh || !o.material || o.userData.ownerKind) return;
+    const mat = o.material;
+    if (mat.map) {
+      mat.map.colorSpace = SRGBColorSpace;
+      mat.map.needsUpdate = true;
     }
-    ensureColor(o.geometry);
-    o.material = bodyMat;
+    if ('roughness' in mat) mat.roughness = 0.82;
+    if ('metalness' in mat) mat.metalness = 0;
+    mat.side = DoubleSide;
+    mat.envMapIntensity = 0.2;
+    if (mat.emissive) mat.emissive.set(0x000000);
+    attachFlap(mat);
+    bodyMat = mat;
     o.userData.ownerKind = 'boss';
     o.userData.zone = 'body';
     o.castShadow = false;
     o.receiveShadow = false;
   });
 
-  const eyeMat = new MeshBasicMaterial({ color: 0xc9b0ff, fog: false });
-  const glowMat = new MeshBasicMaterial({
-    color: 0x7a4dff, transparent: true, opacity: 0.45, depthWrite: false,
-    blending: AdditiveBlending, fog: false,
-  });
-  for (const x of [-0.042, 0.042]) {
-    const eye = new Mesh(new SphereGeometry(0.008, 10, 8), eyeMat);
-    eye.position.set(x, 0.125, 0.27);
+  const eyeMat = new MeshBasicMaterial({ color: 0x9446d4, fog: false, toneMapped: false });
+  for (const x of [-0.028, 0.028]) {
+    const eye = new Mesh(new SphereGeometry(0.02, 12, 8), eyeMat);
+    eye.position.set(x, 0.141, 0.336);
     eye.userData.ownerKind = 'boss';
     eye.userData.zone = 'head';
     face.add(eye);
-    const glow = new Mesh(new SphereGeometry(0.016, 8, 6), glowMat);
-    glow.position.copy(eye.position);
-    glow.userData.ownerKind = 'boss';
-    glow.userData.zone = 'head';
-    face.add(glow);
   }
-  const lamp = new PointLight(0x7c4dff, 2.2, 2.4, 2);
-  lamp.position.set(0, 0.13, 0.3);
+  const lamp = new PointLight(0x7a3ec4, 0.35, 1.6, 2);
+  lamp.position.set(0, 0.13, 0.32);
   face.add(lamp);
 
   const head = new Mesh(new SphereGeometry(0.13, 8, 6), new MeshBasicMaterial({
@@ -83,8 +96,34 @@ async function fetchModel(loader, url) {
   const root = new Group();
   root.add(face);
   root.userData.glb = true;
-  root.userData.mats = [bodyMat];
+  root.userData.mats = bodyMat ? [bodyMat] : [];
   root.userData.standY = gravewingStandY();
   root.position.y = root.userData.standY;
   return root;
+}
+
+export function flashBossMat(mat) {
+  if (!mat) return;
+  if (mat.uniforms?.uFlash) {
+    mat.uniforms.uFlash.value = 1;
+    return;
+  }
+  if (mat.emissive) {
+    mat.userData.flash = 1;
+    if (!mat.userData.flashColor) mat.userData.flashColor = new Color(0xffd8d0);
+    mat.emissive.copy(mat.userData.flashColor);
+    mat.emissiveIntensity = 0.7;
+  }
+}
+
+export function decayBossMat(mat, dt) {
+  if (!mat) return;
+  if (mat.uniforms?.uFlash) {
+    mat.uniforms.uFlash.value = Math.max(0, mat.uniforms.uFlash.value - dt * 2.5);
+    return;
+  }
+  if (mat.emissive && mat.userData.flash) {
+    mat.userData.flash = Math.max(0, mat.userData.flash - dt * 2.5);
+    mat.emissiveIntensity = mat.userData.flash * 0.7;
+  }
 }
