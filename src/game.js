@@ -3,7 +3,7 @@ import {
   Raycaster, BufferGeometry, BufferAttribute, Float32BufferAttribute, Line, LineBasicMaterial,
   Mesh, SphereGeometry, MeshBasicMaterial, ConeGeometry, AdditiveBlending, DoubleSide, PlaneGeometry,
   SRGBColorSpace, ACESFilmicToneMapping, CircleGeometry, BackSide, CatmullRomCurve3,
-  PointLight, DirectionalLight, AmbientLight, HemisphereLight,
+  PointLight, DirectionalLight, AmbientLight, HemisphereLight, CanvasTexture,
 } from 'three';
 import { CHARACTERS, WEAPONS, CAVE, BOSS, BUG, VOICE, EYE, BASE_HP } from './config.js';
 import { flash, litMat, puddleMat, paint, setAtmosphere, setDetail, pbrMat, texturesReady } from './materials.js';
@@ -12,7 +12,7 @@ import {
   createGrove, createTree, createRock, createCrag, createSentry, createDrips, createDust, createRing, stalactite,
   createBeam,
 } from './models.js';
-import { createComposer, gradeTime } from './post.js';
+import { createComposer, gradeTime, gradeShadow } from './post.js';
 import { loadSettings, resolvedQuality } from './settings.js';
 import { loadGravewing, flashBossMat, decayBossMat } from './gravewing.js';
 
@@ -118,9 +118,12 @@ export class Game {
 
     this.view = new Group();
     this.view.position.set(0.36, -0.3, -0.72);
+    this.view.layers.set(1);
+    this.camera.layers.enable(1);
     this.camera.add(this.view);
-    const gunLight = new PointLight(0xfff1df, 0.09, 1.8, 2);
-    gunLight.position.set(0.12, 0.22, -0.15);
+    const gunLight = new PointLight(0xfff4e6, 0.42, 1.6, 2);
+    gunLight.position.set(0.2, 0.35, -0.2);
+    gunLight.layers.set(1);
     this.camera.add(gunLight);
     const dust = createDust(this.quality === 'high' ? 72 : 28);
     this.shaft = createBeam();
@@ -345,6 +348,7 @@ export class Game {
     this.scene.fog.density = flash.uFogDensity.value;
     this.scene.background.copy(flash.uFog.value);
     this.renderer.setClearColor(flash.uFog.value, 1);
+    gradeShadow(this.composer, level === 'forest' ? 0.05 : 0.22);
   }
 
   buildCave() {
@@ -546,8 +550,8 @@ export class Game {
       c.setRGB(0.62 + n * 0.28, 0.64 + n * 0.26, 0.7 + n * 0.22);
     });
     groundGeo.rotateX(-Math.PI / 2);
-    const ground = new Mesh(groundGeo, pbrMat('rock', 0xffffff, {
-      gloss: 0.46, uvRepeat: 6, normalAmt: 1.15, roughBias: -0.16, fill: 1.35,
+    const ground = new Mesh(groundGeo, pbrMat('rock', 0x6a727c, {
+      gloss: 0.34, uvRepeat: 6, normalAmt: 1.05, roughBias: 0.05, fill: 0.22,
     }));
     root.add(ground);
     this.forestSolids = [ground];
@@ -570,11 +574,11 @@ export class Game {
       this.forestSolids.push(mesh);
     }
     const crags = [
-      [-11, 2.2, -4, 2.2, 3.2, 0.35],
-      [11, 1.6, -3, 2.4, 3.4, -0.4],
-      [-8, 0.2, 7, 1.4, 1.8, 0.8],
-      [8.5, 0.4, 8, 1.5, 2.0, -0.7],
-      [0, 3.5, -8, 3.2, 2.6, 0.05],
+      [-16, 1.4, -12, 2.2, 3.2, 0.35],
+      [16, 1.2, -12, 2.4, 3.4, -0.4],
+      [-10, 0.2, 8, 1.2, 1.5, 0.8],
+      [10, 0.3, 9, 1.3, 1.6, -0.7],
+      [0, 2.2, -14, 2.8, 2.2, 0.05],
     ];
     for (const [x, y, z, sx, sy, rot] of crags) {
       const crag = createCrag();
@@ -600,10 +604,10 @@ export class Game {
       crag.rotation.y = x * 0.4;
       root.add(crag);
     }
-    const key = new DirectionalLight(0xd4cec4, 11);
+    const key = new DirectionalLight(0xd8d2c8, 22);
     key.position.set(1.6, 8.5, 11);
     root.add(key);
-    const fill = new DirectionalLight(0xe6e2da, 6);
+    const fill = new DirectionalLight(0xe8e4dc, 12);
     fill.position.set(0, 2.4, 15);
     root.add(fill);
     const rim = new DirectionalLight(0x4a305f, 1.1);
@@ -611,11 +615,28 @@ export class Game {
     root.add(rim);
     root.add(new AmbientLight(0x2e2a28, 1.15));
     root.add(new HemisphereLight(0x445060, 0x101216, 0.45));
+    const hazeCanvas = document.createElement('canvas');
+    hazeCanvas.width = hazeCanvas.height = 256;
+    const hazeCtx = hazeCanvas.getContext('2d');
+    const hazeGrad = hazeCtx.createRadialGradient(128, 78, 8, 128, 100, 150);
+    hazeGrad.addColorStop(0, '#9aabbe');
+    hazeGrad.addColorStop(0.28, '#6a788c');
+    hazeGrad.addColorStop(1, '#4a5668');
+    hazeCtx.fillStyle = hazeGrad;
+    hazeCtx.fillRect(0, 0, 256, 256);
+    const hazeMap = new CanvasTexture(hazeCanvas);
+    hazeMap.colorSpace = SRGBColorSpace;
+    const haze = new Mesh(
+      new PlaneGeometry(120, 72),
+      new MeshBasicMaterial({ map: hazeMap, fog: false, depthWrite: false }),
+    );
+    haze.position.set(0, 5.5, -6);
+    root.add(haze);
     for (let i = 0; i < 8; i++) {
       const sheet = new Mesh(
         new PlaneGeometry(18, 6),
         new MeshBasicMaterial({
-          color: 0x1a242e, transparent: true, opacity: 0.14, depthWrite: false, side: DoubleSide, fog: false,
+          color: 0x5a6676, transparent: true, opacity: 0.06, depthWrite: false, side: DoubleSide, fog: false,
         }),
       );
       sheet.position.set((i - 4) * 1.5, 1.2 + (i % 3) * 0.8, -2 - i * 0.6);
@@ -957,6 +978,7 @@ export class Game {
     }
     this.viewModel = createWeaponModel(view, this.char.glove);
     this.viewModel.scale.setScalar(0.78);
+    this.viewModel.traverse((o) => o.layers.set(1));
     this.view.add(this.viewModel);
     this.muzzleT = 0;
   }

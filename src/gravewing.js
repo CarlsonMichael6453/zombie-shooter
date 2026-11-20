@@ -1,5 +1,5 @@
 import {
-  Group, Mesh, SphereGeometry, MeshBasicMaterial, PointLight, AdditiveBlending,
+  Group, Mesh, SphereGeometry, MeshBasicMaterial, PointLight,
   SRGBColorSpace, DoubleSide, Color,
 } from 'three';
 
@@ -72,24 +72,15 @@ async function fetchModel(loader, url) {
     o.receiveShadow = false;
   });
 
-  const eyeMat = new MeshBasicMaterial({ color: 0x5a3a96, fog: false });
-  const glowMat = new MeshBasicMaterial({
-    color: 0x5a32b0, transparent: true, opacity: 0.22, depthWrite: false,
-    blending: AdditiveBlending, fog: false,
-  });
-  for (const x of [-0.04, 0.04]) {
-    const eye = new Mesh(new SphereGeometry(0.007, 10, 8), eyeMat);
-    eye.position.set(x, 0.122, 0.268);
+  const eyeMat = new MeshBasicMaterial({ color: 0x9446d4, fog: false, toneMapped: false });
+  for (const x of [-0.028, 0.028]) {
+    const eye = new Mesh(new SphereGeometry(0.02, 12, 8), eyeMat);
+    eye.position.set(x, 0.141, 0.336);
     eye.userData.ownerKind = 'boss';
     eye.userData.zone = 'head';
     face.add(eye);
-    const glow = new Mesh(new SphereGeometry(0.013, 8, 6), glowMat);
-    glow.position.copy(eye.position);
-    glow.userData.ownerKind = 'boss';
-    glow.userData.zone = 'head';
-    face.add(glow);
   }
-  const lamp = new PointLight(0x7a4ad4, 0.55, 1.4, 2);
+  const lamp = new PointLight(0x7a3ec4, 0.35, 1.6, 2);
   lamp.position.set(0, 0.13, 0.32);
   face.add(lamp);
 

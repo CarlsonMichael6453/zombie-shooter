@@ -1,7 +1,7 @@
 import {
   Group, Mesh, InstancedMesh, Object3D, BoxGeometry, SphereGeometry, CylinderGeometry, ConeGeometry,
   TorusGeometry, BufferGeometry, BufferAttribute, Float32BufferAttribute,
-  MeshBasicMaterial, MeshStandardMaterial, CanvasTexture, SRGBColorSpace, DoubleSide, Points, PointsMaterial,
+  MeshBasicMaterial, MeshStandardMaterial, CanvasTexture, SRGBColorSpace, RepeatWrapping, DoubleSide, Points, PointsMaterial,
   Shape, ExtrudeGeometry, CircleGeometry, RingGeometry, IcosahedronGeometry,
   BackSide, AdditiveBlending, PlaneGeometry, LatheGeometry, Vector2,
 } from 'three';
@@ -412,6 +412,51 @@ export function poseBird(root, stand, spread, flap) {
   if (p.eyeGlow) p.eyeGlow.material.opacity = 0.2 + glow * 0.65;
 }
 
+function noiseTex(paint) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  paint(g, c);
+  const tex = new CanvasTexture(c);
+  tex.colorSpace = SRGBColorSpace;
+  tex.wrapS = tex.wrapT = RepeatWrapping;
+  return tex;
+}
+
+function steelMap() {
+  return noiseTex((g) => {
+    const img = g.createImageData(128, 128);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const n = 150 + (Math.random() - 0.5) * 36;
+      img.data[i] = n - 8;
+      img.data[i + 1] = n;
+      img.data[i + 2] = n + 10;
+      img.data[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    g.strokeStyle = 'rgba(30, 36, 44, 0.7)';
+    g.lineWidth = 3;
+    for (let y = 18; y < 128; y += 22) {
+      g.beginPath();
+      g.moveTo(0, y);
+      g.lineTo(128, y);
+      g.stroke();
+    }
+  });
+}
+
+function woodMap() {
+  return noiseTex((g) => {
+    g.fillStyle = '#2c2016';
+    g.fillRect(0, 0, 128, 128);
+    for (let y = 0; y < 128; y += 1) {
+      const n = 42 + Math.sin(y * 0.45) * 10 + (Math.random() - 0.5) * 6;
+      g.fillStyle = `rgb(${n + 12}, ${n}, ${n - 8})`;
+      g.fillRect(0, y, 128, 1);
+    }
+  });
+}
+
 export function createWeaponModel(view, glove = 0x5a4638) {
   const g = new Group();
   const metal = new MeshStandardMaterial({ color: 0x3e4752, roughness: 0.64, metalness: 0.16 });
@@ -446,14 +491,25 @@ export function createWeaponModel(view, glove = 0x5a4638) {
     add(box(0.045, 0.12, 0.06, dark), 0, -0.04, 0.02);
     add(box(0.07, 0.06, 0.08, gloveMat), 0.01, -0.05, 0.04);
   } else if (view === 'cannon') {
-    add(cyl(0.022, 0.42, dark).rotateX(-Math.PI / 2), 0, 0.09, -0.28);
-    add(cyl(0.034, 0.08, metal).rotateX(-Math.PI / 2), 0, 0.09, -0.46);
-    add(cyl(0.055, 0.14, metal).rotateX(-Math.PI / 2), 0, 0.055, -0.02);
-    add(box(0.012, 0.05, 0.016, metal), 0, 0.12, -0.46);
-    add(box(0.018, 0.07, 0.02, dark), 0, 0.1, 0.08);
-    add(box(0.05, 0.18, 0.055, wood), 0, -0.07, 0.06);
-    add(new Mesh(new TorusGeometry(0.045, 0.008, 6, 10), dark), 0, -0.02, 0.02);
-    add(box(0.09, 0.07, 0.1, gloveMat), 0.02, -0.06, 0.07);
+    const steel = new MeshStandardMaterial({
+      map: steelMap(), color: 0x8d98a4, roughness: 0.46, metalness: 0.55,
+    });
+    const grip = new MeshStandardMaterial({
+      map: woodMap(), color: 0x4a3424, roughness: 0.82, metalness: 0.02,
+    });
+    add(cyl(0.018, 0.46, steel, 10).rotateX(-Math.PI / 2), 0, 0.092, -0.3);
+    add(cyl(0.028, 0.07, steel, 10).rotateX(-Math.PI / 2), 0, 0.092, -0.5);
+    add(cyl(0.012, 0.5, dark, 8).rotateX(-Math.PI / 2), 0.02, 0.078, -0.26);
+    add(cyl(0.042, 0.11, steel, 12).rotateX(-Math.PI / 2), 0, 0.055, -0.02);
+    add(box(0.07, 0.055, 0.12, steel), 0, 0.07, 0.02);
+    add(box(0.008, 0.045, 0.012, steel), 0, 0.125, -0.5);
+    add(box(0.012, 0.05, 0.018, dark), 0, 0.1, 0.1);
+    add(box(0.016, 0.055, 0.04, dark), 0, 0.12, 0.06);
+    add(box(0.028, 0.16, 0.042, grip), -0.012, -0.06, 0.07);
+    add(box(0.028, 0.16, 0.042, grip), 0.012, -0.06, 0.07);
+    add(box(0.012, 0.15, 0.02, dark), 0, -0.05, 0.09);
+    add(new Mesh(new TorusGeometry(0.04, 0.006, 6, 12), dark), 0, -0.01, 0.03);
+    add(box(0.04, 0.028, 0.05, gloveMat), 0.028, -0.02, 0.07);
   } else if (view === 'flare') {
     add(box(0.07, 0.08, 0.16, new MeshBasicMaterial({ color: 0x9a3a22 })), 0, 0.04, -0.06);
     add(cyl(0.03, 0.12, accent).rotateX(-Math.PI / 2), 0, 0.05, -0.18);
