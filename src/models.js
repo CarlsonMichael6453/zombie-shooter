@@ -12,30 +12,37 @@ const SHELL = shellNormal();
 let featherTex;
 function featherMap() {
   if (featherTex) return featherTex;
+  const w = 96;
+  const h = 320;
   const c = document.createElement('canvas');
-  c.width = 128;
-  c.height = 320;
+  c.width = w;
+  c.height = h;
   const g = c.getContext('2d');
-  g.clearRect(0, 0, 128, 320);
+  g.clearRect(0, 0, w, h);
+  g.fillStyle = '#e6ebf2';
   g.beginPath();
-  g.moveTo(64, 8);
-  g.bezierCurveTo(120, 48, 118, 190, 64, 308);
-  g.bezierCurveTo(10, 190, 8, 48, 64, 8);
-  g.fillStyle = '#b7c3d0';
-  g.fill();
-  g.strokeStyle = 'rgba(48, 42, 72, 0.95)';
-  g.lineWidth = 1.5;
-  for (let i = 0; i < 16; i++) {
-    const y = 28 + i * 16;
-    g.beginPath();
-    g.moveTo(64, y);
-    g.lineTo(18, y + 22);
-    g.moveTo(64, y);
-    g.lineTo(110, y + 22);
-    g.stroke();
+  g.moveTo(w * 0.5, 6);
+  for (let y = 12; y <= h - 8; y += 7) {
+    const t = y / h;
+    const half = (1 - t) * 34 + 5 + Math.sin(t * 26) * 5;
+    const jag = ((y / 7) % 2) * 7;
+    g.lineTo(w * 0.5 + half + jag, y);
   }
-  g.fillStyle = 'rgba(64, 55, 109, 0.55)';
-  g.fillRect(54, 36, 20, 210);
+  g.lineTo(w * 0.5, h - 4);
+  for (let y = h - 8; y >= 12; y -= 7) {
+    const t = y / h;
+    const half = (1 - t) * 34 + 5 + Math.sin(t * 22 + 1.3) * 5;
+    const jag = ((y / 7) % 2) * 6;
+    g.lineTo(w * 0.5 - half - jag, y);
+  }
+  g.closePath();
+  g.fill();
+  g.globalCompositeOperation = 'destination-out';
+  for (let i = 0; i < 22; i++) {
+    const y = 16 + i * 13;
+    g.fillRect(2, y, 10 + (i % 3) * 4, 3);
+    g.fillRect(w - 14, y + 6, 12, 3);
+  }
   const tex = new CanvasTexture(c);
   tex.colorSpace = SRGBColorSpace;
   tex.userData.shared = true;
@@ -208,32 +215,43 @@ export function stepBug(root, time, moving) {
 export function createBird(quality = 'high') {
   const dense = quality !== 'low';
   const root = new Group();
-  const mat = litMat(0x14161c, undefined, { gloss: 0.62, normalAmt: 0.15 });
+  const mat = litMat(0x0c0e12, undefined, { gloss: 0.12, normalAmt: 0.05 });
   const wingMat = litMat(0x101216, DoubleSide, { gloss: 0.35, normalAmt: 0.1 });
   const beakMat = new MeshBasicMaterial({ color: 0xb7c0c8 });
   beakMat.userData.shared = true;
   const featherMat = new MeshBasicMaterial({
-    map: featherMap(), color: 0x6a7380, transparent: true, alphaTest: 0.18, side: DoubleSide,
+    map: featherMap(), color: 0x1a2026, transparent: true, alphaTest: 0.2, side: DoubleSide, fog: false,
   });
   featherMat.userData.shared = true;
   const sheenMat = featherMat.clone();
-  sheenMat.color.set(0x7a68a4);
+  sheenMat.color.set(0x3a3058);
   sheenMat.userData.shared = true;
+  const rimMat = featherMat.clone();
+  rimMat.color.set(0x8ea0b0);
+  rimMat.userData.shared = true;
   root.userData.mats = [mat, wingMat];
 
   const torso = new Group();
   root.add(torso);
 
   const body = new Mesh(geo('birdBody', () => {
-    const g = new SphereGeometry(0.7, 16, 12);
-    g.scale(0.95, 0.82, 1.2);
+    const g = new SphereGeometry(0.42, 14, 10);
+    g.scale(0.85, 0.9, 1.15);
     return g;
   }), mat);
-  body.position.set(0, 1.55, 0.08);
+  body.position.set(0, 1.55, 0.15);
   body.userData.zone = 'body';
+  body.visible = false;
   torso.add(body);
-
   const scaleGeo = geo('featherScale', () => new PlaneGeometry(0.55, 0.28));
+  for (let i = 0; i < 12; i++) {
+    const bib = new Mesh(scaleGeo, i % 5 === 0 ? sheenMat : featherMat);
+    bib.position.set((i % 4 - 1.5) * 0.28, 1.7 - Math.floor(i / 4) * 0.38, -0.72);
+    bib.scale.set(2.2, 2.6, 1);
+    bib.rotation.y = Math.PI;
+    torso.add(bib);
+  }
+
   const rows = dense ? 8 : 4;
   const cols = dense ? 6 : 3;
   for (let r = 0; r < rows; r++) {
@@ -252,14 +270,14 @@ export function createBird(quality = 'high') {
   torso.add(neck);
 
   const head = new Group();
-  head.position.set(0, 2.55, -0.95);
+  head.position.set(0, 1.9, -1.35);
   torso.add(head);
   const skull = new Mesh(geo('birdHead', () => new SphereGeometry(0.3, 14, 12)), mat);
-  skull.scale.set(0.82, 0.78, 1.12);
+  skull.scale.set(1.15, 1.05, 1.35);
   skull.userData.zone = 'head';
   head.add(skull);
 
-  const beak = new Mesh(geo('birdBeak', () => new ConeGeometry(0.1, 0.58, 7)), beakMat);
+  const beak = new Mesh(geo('birdBeak', () => new ConeGeometry(0.13, 0.72, 7)), beakMat);
   beak.position.set(0, -0.02, -0.46);
   beak.rotation.x = -1.65;
   beak.userData.zone = 'head';
@@ -273,9 +291,9 @@ export function createBird(quality = 'high') {
   beakLow.rotation.x = -2.15;
   head.add(beakLow);
 
-  const eye = new Mesh(geo('birdEye', () => new SphereGeometry(0.065, 10, 8)), basic('birdEye', 0xe7e2ff));
-  eye.position.set(0.13, 0.05, -0.2);
-  eye.scale.set(0.65, 1.2, 0.5);
+  const eye = new Mesh(geo('birdEye', () => new SphereGeometry(0.11, 12, 10)), basic('birdEye', 0xf7f4ff, { fog: false }));
+  eye.position.set(0.11, 0.08, -0.36);
+  eye.scale.set(0.75, 1.45, 0.6);
   head.add(eye);
   const eyeGlow = new Mesh(
     geo('birdEyeGlow', () => new SphereGeometry(0.1, 8, 6)),
@@ -294,26 +312,27 @@ export function createBird(quality = 'high') {
   const wingL = new Group();
   wingR.position.set(0.42, 1.9, -0.15);
   wingL.position.set(-0.42, 1.9, -0.15);
-  const cardGeo = geo('featherCard', () => new PlaneGeometry(1.15, 0.62));
+  const cardGeo = geo('featherCard', () => new PlaneGeometry(0.42, 1.55));
   function lay(wing, sign) {
-    const layers = dense
-      ? [
-        { y: 0.95, reach: 2.8, n: 7, mat: featherMat },
-        { y: 0.22, reach: 3.8, n: 8, mat: sheenMat },
-        { y: -0.5, reach: 3.2, n: 7, mat: featherMat },
-      ]
-      : [
-        { y: 0.4, reach: 2.8, n: 5, mat: featherMat },
-        { y: -0.05, reach: 3.3, n: 6, mat: sheenMat },
-      ];
-    for (const layer of layers) {
-      for (let i = 0; i < layer.n; i++) {
-        const along = i / Math.max(1, layer.n - 1);
-        const card = new Mesh(cardGeo, layer.mat);
-        card.position.set(sign * (0.4 + along * layer.reach), layer.y - along * 0.38, (i % 2) * 0.025);
+    const layers = dense ? 3 : 2;
+    const count = dense ? 12 : 7;
+    for (let layer = 0; layer < layers; layer++) {
+      for (let i = 0; i < count; i++) {
+        const along = i / (count - 1);
+        const droop = -0.55 + along * 1.35;
+        const reach = 0.35 + along * (2.6 + layer * 0.35);
+        const matCard = (layer === 1 && i % 3 === 0) ? sheenMat : featherMat;
+        const rim = new Mesh(cardGeo, rimMat);
+        rim.position.set(sign * reach, 0.95 - along * 1.25 - layer * 0.05, -0.04);
+        rim.rotation.y = Math.PI;
+        rim.rotation.z = sign * (Math.PI / 2 - droop);
+        rim.scale.set(0.7 + along * 0.42, 0.62 + along * 1.05, 1);
+        wing.add(rim);
+        const card = new Mesh(cardGeo, matCard);
+        card.position.set(sign * reach, 0.95 - along * 1.25 - layer * 0.05, 0.05);
         card.rotation.y = Math.PI;
-        card.rotation.z = sign * (-0.04 - along * 0.22);
-        card.scale.set(0.72 + along * 0.55, 0.8 + (i % 3) * 0.12, 1);
+        card.rotation.z = sign * (Math.PI / 2 - droop);
+        card.scale.set(0.52 + along * 0.3, 0.46 + along * 0.82, 1);
         wing.add(card);
       }
     }
@@ -358,7 +377,7 @@ export function createBird(quality = 'high') {
   });
 
   root.userData.parts = { torso, head, wingL, wingR, legL, legR, eye, eyeGlow };
-  root.scale.setScalar(1.7);
+  root.scale.setScalar(1.9);
   return root;
 }
 
@@ -527,6 +546,24 @@ export function createAmmoCrate() {
   g.add(box);
   g.add(stripe);
   return g;
+}
+
+export function createCrag() {
+  const geometry = new PlaneGeometry(5.2, 7.4, 12, 16);
+  const pos = geometry.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const n = Math.sin(x * 1.6 + y * 0.35) * 0.55
+      + Math.sin(x * 3.4 - y * 1.1) * 0.28
+      + Math.sin(y * 0.9 + x) * 0.22;
+    pos.setZ(i, n * (0.35 + Math.max(0, y) * 0.08));
+  }
+  geometry.computeVertexNormals();
+  ensureColor(geometry);
+  return new Mesh(geometry, pbrMat('rock', 0x9aa6b4, {
+    side: DoubleSide, gloss: 0.22, uvRepeat: 1.4, normalAmt: 0.65,
+  }));
 }
 
 export function createGrove(spots) {

@@ -1,14 +1,14 @@
 import {
   WebGLRenderer, PerspectiveCamera, Scene, Color, FogExp2, Group, Vector2, Vector3,
   Raycaster, BufferGeometry, BufferAttribute, Float32BufferAttribute, Line, LineBasicMaterial,
-  Mesh, SphereGeometry, MeshBasicMaterial, ConeGeometry, AdditiveBlending, DoubleSide,
+  Mesh, SphereGeometry, MeshBasicMaterial, ConeGeometry, AdditiveBlending, DoubleSide, PlaneGeometry,
   SRGBColorSpace, ACESFilmicToneMapping, CircleGeometry, BackSide, CatmullRomCurve3,
 } from 'three';
 import { CHARACTERS, WEAPONS, CAVE, BOSS, BUG, VOICE, EYE, BASE_HP } from './config.js';
 import { flash, litMat, puddleMat, paint, setAtmosphere, setDetail, pbrMat, texturesReady } from './materials.js';
 import {
   createWallskitter, stepBug, createBird, poseBird, createWeaponModel, createMedkit, createAmmoCrate,
-  createGrove, createTree, createRock, createSentry, createDrips, createDust, createRing, stalactite,
+  createGrove, createTree, createRock, createCrag, createSentry, createDrips, createDust, createRing, stalactite,
   createBeam,
 } from './models.js';
 import { createComposer, gradeTime } from './post.js';
@@ -526,14 +526,23 @@ export class Game {
 
   buildForest() {
     const root = new Group();
-    const groundGeo = new CircleGeometry(62, 28);
+    const groundGeo = new PlaneGeometry(80, 80, 40, 40);
+    const gp = groundGeo.attributes.position;
+    for (let i = 0; i < gp.count; i++) {
+      const x = gp.getX(i);
+      const y = gp.getY(i);
+      const n = Math.sin(x * 0.35) * Math.cos(y * 0.28) * 0.35
+        + Math.sin(x * 0.9 + y * 0.7) * 0.12;
+      gp.setZ(i, n);
+    }
+    groundGeo.computeVertexNormals();
     paint(groundGeo, (c, x, y, z, i) => {
-      const n = hash(i + x * 2.2 + y * 1.7);
-      c.setRGB(0.16 + n * 0.06, 0.18 + n * 0.05, 0.14 + n * 0.04);
+      const n = hash(i + x * 0.4 + y);
+      c.setRGB(0.28 + n * 0.08, 0.24 + n * 0.06, 0.18 + n * 0.05);
     });
     groundGeo.rotateX(-Math.PI / 2);
-    const ground = new Mesh(groundGeo, pbrMat('ground', 0x24282e, {
-      gloss: 0.22, uvRepeat: 10, normalAmt: 0.85, roughBias: 0.05,
+    const ground = new Mesh(groundGeo, pbrMat('ground', 0x6a5c4e, {
+      gloss: 0.08, uvRepeat: 5, normalAmt: 0.85, roughBias: 0.2,
     }));
     root.add(ground);
     this.forestSolids = [ground];
@@ -543,7 +552,7 @@ export class Game {
     const spots = [];
     for (let i = 0; i < count; i++) {
       const ang = (i / count) * Math.PI * 2 + hash(i) * 0.55;
-      const rad = 16 + hash(i + 3) * 26;
+      const rad = 28 + hash(i + 3) * 22;
       const x = Math.cos(ang) * rad;
       const z = Math.sin(ang) * rad;
       if (Math.abs(x) < 7 && z > -6 && z < 26) continue;
@@ -555,25 +564,29 @@ export class Game {
       root.add(mesh);
       this.forestSolids.push(mesh);
     }
-    const heroes = [[14, 8], [-16, 6], [18, -6], [-12, -10], [20, 14], [-18, 2], [8, -16], [22, 4], [-20, -8]];
-    heroes.forEach(([x, z], i) => {
-      const tree = createTree();
-      tree.position.set(x, 0, z);
-      tree.scale.setScalar(1.15 + (i % 4) * 0.28);
-      root.add(tree);
-      this.forestSolids.push(tree);
-      this.forestColliders.push({ x, z, r: 0.6 });
-    });
-    for (let i = 0; i < 18; i++) {
-      const rock = createRock();
-      const ang = hash(i + 20) * Math.PI * 2;
-      const rad = 5.5 + hash(i + 21) * 9;
-      rock.position.set(Math.cos(ang) * rad, 0.05, Math.sin(ang) * rad - 1);
-      if (Math.abs(rock.position.x) < 2.2 && rock.position.z > 8) rock.position.x += 4;
-      rock.scale.set(0.7 + hash(i) * 1.4, 0.45 + hash(i + 2) * 1.1, 0.6 + hash(i + 4) * 1.2);
-      rock.rotation.y = hash(i + 6) * 6;
-      root.add(rock);
-      this.forestColliders.push({ x: rock.position.x, z: rock.position.z, r: 0.45 * rock.scale.x });
+    const crags = [
+      [-11, 2.2, -4, 2.2, 3.2, 0.35],
+      [11, 1.6, -3, 2.4, 3.4, -0.4],
+      [-8, 0.2, 7, 1.4, 1.8, 0.8],
+      [8.5, 0.4, 8, 1.5, 2.0, -0.7],
+      [0, 3.5, -8, 3.2, 2.6, 0.05],
+    ];
+    for (const [x, y, z, sx, sy, rot] of crags) {
+      const crag = createCrag();
+      crag.position.set(x, y, z);
+      crag.scale.set(sx, sy, 1);
+      crag.rotation.y = rot;
+      root.add(crag);
+    }
+    for (let i = 0; i < 8; i++) {
+      const sheet = new Mesh(
+        new PlaneGeometry(18, 6),
+        new MeshBasicMaterial({
+          color: 0x7d8c9c, transparent: true, opacity: 0.07, depthWrite: false, side: DoubleSide,
+        }),
+      );
+      sheet.position.set((i - 4) * 1.5, 1.2 + (i % 3) * 0.8, -2 - i * 0.6);
+      root.add(sheet);
     }
 
     const moonMat = new MeshBasicMaterial({ color: 0xd7e4ff, fog: false });

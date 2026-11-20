@@ -307,17 +307,18 @@ export function setAtmosphere(level) {
     flash.uSky.value.set(0x2a3846);
     flash.uGround.value.set(0x12161c);
     flash.uAmbient.value.set(0x2a3846);
-    flash.uFog.value.set(0x1a242e);
-    flash.uFogDensity.value = 0.028;
-    flash.uMoonAmt.value = 0.55;
-    flash.uRimAmt.value = 0.85;
-    flash.uRange.value = 20;
-    flash.uIntensity.value = 1.7;
+    flash.uFog.value.set(0x4a5968);
+    flash.uFogDensity.value = 0.02;
+    flash.uMoonAmt.value = 0.35;
+    flash.uRimAmt.value = 1.85;
+    flash.uMoonDir.value.set(0.08, 0.42, -0.9).normalize();
+    flash.uRange.value = 14;
+    flash.uIntensity.value = 0.16;
     flash.uInner.value = Math.cos(0.48);
     flash.uOuter.value = Math.cos(1.05);
     flash.uLight.value.set(0xd5e2f2);
     flash.uMoon.value.set(0x9eb0c4);
-    flash.uRim.value.set(0x8aa0b8);
+    flash.uRim.value.set(0xd5dee8);
   } else {
     flash.uSky.value.set(0x1c3442);
     flash.uGround.value.set(0x0c1418);
