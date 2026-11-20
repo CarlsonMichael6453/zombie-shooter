@@ -1,14 +1,14 @@
 import {
   WebGLRenderer, PerspectiveCamera, Scene, Color, FogExp2, Group, Vector2, Vector3,
   Raycaster, BufferGeometry, BufferAttribute, Float32BufferAttribute, Line, LineBasicMaterial,
-  Mesh, SphereGeometry, MeshBasicMaterial, ConeGeometry, AdditiveBlending, DoubleSide,
+  Mesh, SphereGeometry, MeshBasicMaterial, ConeGeometry, AdditiveBlending, DoubleSide, PlaneGeometry,
   SRGBColorSpace, ACESFilmicToneMapping, CircleGeometry, BackSide, CatmullRomCurve3,
 } from 'three';
 import { CHARACTERS, WEAPONS, CAVE, BOSS, BUG, VOICE, EYE, BASE_HP } from './config.js';
 import { flash, litMat, puddleMat, paint, setAtmosphere, setDetail, pbrMat, texturesReady } from './materials.js';
 import {
   createWallskitter, stepBug, createBird, poseBird, createWeaponModel, createMedkit, createAmmoCrate,
-  createGrove, createTree, createRock, createSentry, createDrips, createDust, createRing, stalactite,
+  createGrove, createTree, createRock, createCrag, createSentry, createDrips, createDust, createRing, stalactite,
   createBeam,
 } from './models.js';
 import { createComposer, gradeTime } from './post.js';
@@ -526,14 +526,23 @@ export class Game {
 
   buildForest() {
     const root = new Group();
-    const groundGeo = new CircleGeometry(62, 28);
+    const groundGeo = new PlaneGeometry(80, 80, 40, 40);
+    const gp = groundGeo.attributes.position;
+    for (let i = 0; i < gp.count; i++) {
+      const x = gp.getX(i);
+      const y = gp.getY(i);
+      const n = Math.sin(x * 0.35) * Math.cos(y * 0.28) * 0.35
+        + Math.sin(x * 0.9 + y * 0.7) * 0.12;
+      gp.setZ(i, n);
+    }
+    groundGeo.computeVertexNormals();
     paint(groundGeo, (c, x, y, z, i) => {
-      const n = hash(i + x * 2.2 + y * 1.7);
-      c.setRGB(0.16 + n * 0.06, 0.18 + n * 0.05, 0.14 + n * 0.04);
+      const n = hash(i + x * 0.4 + y);
+      c.setRGB(0.28 + n * 0.08, 0.24 + n * 0.06, 0.18 + n * 0.05);
     });
     groundGeo.rotateX(-Math.PI / 2);
-    const ground = new Mesh(groundGeo, pbrMat('ground', 0x46525c, {
-      gloss: 0.22, uvRepeat: 10, normalAmt: 0.85, roughBias: 0.05,
+    const ground = new Mesh(groundGeo, pbrMat('ground', 0x6a5c4e, {
+      gloss: 0.08, uvRepeat: 5, normalAmt: 0.85, roughBias: 0.2,
     }));
     root.add(ground);
     this.forestSolids = [ground];
@@ -543,10 +552,10 @@ export class Game {
     const spots = [];
     for (let i = 0; i < count; i++) {
       const ang = (i / count) * Math.PI * 2 + hash(i) * 0.55;
-      const rad = 8 + hash(i + 3) * 28;
+      const rad = 28 + hash(i + 3) * 22;
       const x = Math.cos(ang) * rad;
       const z = Math.sin(ang) * rad;
-      if (Math.abs(x) < 4.2 && z > 12 && z < 28) continue;
+      if (Math.abs(x) < 7 && z > -6 && z < 26) continue;
       const s = 0.85 + hash(i + 8) * 1.15;
       spots.push({ x, z, s, rot: hash(i + 4) * 6 });
       this.forestColliders.push({ x, z, r: 0.55 * s });
@@ -555,23 +564,29 @@ export class Game {
       root.add(mesh);
       this.forestSolids.push(mesh);
     }
-    const heroes = [[7, 5], [-8, 7], [10, -3], [-6, -5], [13, 11], [-13, 1], [5, -11], [-3, 16], [16, 3], [-15, -7], [0, -8], [9, 16]];
-    heroes.forEach(([x, z], i) => {
-      const tree = createTree();
-      tree.position.set(x, 0, z);
-      tree.scale.setScalar(1.15 + (i % 4) * 0.28);
-      root.add(tree);
-      this.forestSolids.push(tree);
-      this.forestColliders.push({ x, z, r: 0.6 });
-    });
-    for (let i = 0; i < 10; i++) {
-      const rock = createRock();
-      const ang = hash(i + 20) * Math.PI * 2;
-      const rad = 8 + hash(i + 21) * 16;
-      rock.position.set(Math.cos(ang) * rad, 0.1, Math.sin(ang) * rad);
-      if (rock.position.z > 16 && Math.abs(rock.position.x) < 4) rock.position.z = -6;
-      rock.scale.setScalar(0.6 + hash(i) * 0.8);
-      root.add(rock);
+    const crags = [
+      [-11, 2.2, -4, 2.2, 3.2, 0.35],
+      [11, 1.6, -3, 2.4, 3.4, -0.4],
+      [-8, 0.2, 7, 1.4, 1.8, 0.8],
+      [8.5, 0.4, 8, 1.5, 2.0, -0.7],
+      [0, 3.5, -8, 3.2, 2.6, 0.05],
+    ];
+    for (const [x, y, z, sx, sy, rot] of crags) {
+      const crag = createCrag();
+      crag.position.set(x, y, z);
+      crag.scale.set(sx, sy, 1);
+      crag.rotation.y = rot;
+      root.add(crag);
+    }
+    for (let i = 0; i < 8; i++) {
+      const sheet = new Mesh(
+        new PlaneGeometry(18, 6),
+        new MeshBasicMaterial({
+          color: 0x7d8c9c, transparent: true, opacity: 0.07, depthWrite: false, side: DoubleSide,
+        }),
+      );
+      sheet.position.set((i - 4) * 1.5, 1.2 + (i % 3) * 0.8, -2 - i * 0.6);
+      root.add(sheet);
     }
 
     const moonMat = new MeshBasicMaterial({ color: 0xd7e4ff, fog: false });
@@ -580,7 +595,7 @@ export class Game {
     moon.position.set(-26, 32, -18);
     root.add(moon);
 
-    const bird = createBird();
+    const bird = createBird(this.quality);
     bird.position.set(0, 0, 0);
     poseBird(bird, 0.05, 0, 0);
     root.add(bird);
@@ -1501,6 +1516,19 @@ export class Game {
       if (dist < BOSS.wakeRange) this.wakeBoss();
       return;
     }
+    if (b.phase === 'reveal') {
+      b.timer += dt;
+      poseBird(b.mesh, 1, 1, this.time * 2.4);
+      b.mesh.position.y = 0;
+      b.mesh.lookAt(this.feet.x, 0, this.feet.z);
+      if (dist < BOSS.wakeRange || b.timer > 7) {
+        b.phase = 'fight';
+        b.nextAttack = this.time + 1.4;
+        this.ui.boss(true, b.hp / b.maxHp);
+        this.ui.objective('Kill Gravewing');
+      }
+      return;
+    }
     if (b.phase === 'wake') {
       b.timer += dt;
       const stand = smooth(b.timer / 1.5);
@@ -1825,16 +1853,25 @@ export class Game {
     this.scene.add(this.forestRoot);
     this.solidMeshes = this.forestSolids;
     this.colliders = this.forestColliders;
-    this.feet.set(0, 0, 25);
-    this.aimAt(0, 2.2, 0);
+    this.feet.set(0, 0, 18);
+    this.aimAt(0, 2.4, 0);
+    poseBird(this.boss.mesh, 1, 1, 0);
+    this.boss.phase = 'reveal';
+    this.boss.timer = 0;
+    this.boss.mesh.position.set(0, 0, 0);
+    this.boss.mesh.lookAt(0, 0, 18);
     this.audio.playPlaylist('forest');
-    this.ui.objective('Something is sleeping in the clearing');
-    this.ui.subtitle(this.char.short, this.char.barks.enterForest, 2600);
+    this.ui.objective('Gravewing');
+    if (token !== this.token) return;
+    await this.hooks.onCutscene?.();
+    if (token !== this.token) return;
+    this.boss.screeched = true;
     this.ui.fade(0);
-    await wait(460);
+    await wait(480);
     if (token !== this.token) return;
     this.inputLock = false;
     this.transitioning = false;
+    this.ui.subtitle(this.char.short, this.char.barks.enterForest, 2200);
     this.hooks.onCalm?.('cave');
   }
 

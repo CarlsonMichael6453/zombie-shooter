@@ -101,9 +101,18 @@ const combat = await page.evaluate(async () => {
   await new Promise((r) => setTimeout(r, 200));
   const e = g.enemies.find((en) => en.alive);
   if (!e) return { error: 'no enemy' };
+  e.state = 'still';
+  g.camera.getWorldDirection(g.forward);
+  e.mesh.position.set(
+    g.feet.x + g.forward.x * 3,
+    g.feet.y + 0.2,
+    g.feet.z + g.forward.z * 3,
+  );
+  e.mesh.up.set(0, 1, 0);
+  e.mesh.lookAt(g.feet.x, g.feet.y + 1, g.feet.z);
   const before = e.hp;
   for (let i = 0; i < 12; i++) {
-    g.aimAt(e.aim.x, e.aim.y, e.aim.z);
+    g.aimAt(e.mesh.position.x, e.mesh.position.y + 0.4, e.mesh.position.z);
     g.nextShot = 0;
     g.tryFire();
     await new Promise((r) => setTimeout(r, 30));
@@ -129,6 +138,9 @@ const forest = await page.evaluate(async () => {
 });
 console.log('forest', forest);
 if (forest.level !== 'forest') fail('did not reach forest');
+await new Promise((r) => setTimeout(r, 1200));
+await page.evaluate(() => document.getElementById('cutscene-skip')?.click());
+await new Promise((r) => setTimeout(r, 500));
 await page.screenshot({ path: `${out}/05-forest.png` });
 
 const boss = await page.evaluate(async () => {
